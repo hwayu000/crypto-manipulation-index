@@ -11,17 +11,17 @@
 /* ── RESET ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --ink:#f0f0ed;
-  --ink2:#7a7a78;
-  --ink3:#3a3a38;
-  --ink4:#1e1e1c;
+  --ink:#f2f2ef;
+  --ink2:#b0b0a8;   /* was #7a7a78 — lifted for readability */
+  --ink3:#707068;   /* was #3a3a38 — lifted 2 stops */
+  --ink4:#3a3a38;
   --paper:#0c0c0a;
   --paper2:#141412;
   --paper3:#1c1c1a;
   --paper4:#242422;
   --paper5:#2c2c2a;
-  --line:rgba(240,240,237,0.08);
-  --line2:rgba(240,240,237,0.14);
+  --line:rgba(240,240,237,0.10);
+  --line2:rgba(240,240,237,0.18);
   --blue:#4a7ef5;
   --green:#34c97a;
   --orange:#e8a020;
@@ -62,9 +62,11 @@ input{font-family:var(--sans);}
 }
 #notify-btn:hover{border-color:var(--line2);color:var(--ink);}
 #notify-active-dot{
-  width:5px;height:5px;border-radius:50%;background:var(--ink3);
+  width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 4px var(--red);
+  flex-shrink:0;
 }
-#notify-active-dot.on{background:var(--green);box-shadow:0 0 5px var(--green);}
+#notify-active-dot.tested{background:var(--green);box-shadow:0 0 6px var(--green);}
+#notify-active-dot.configured{background:var(--orange);box-shadow:0 0 4px var(--orange);}
 
 /* ── LAYOUT ── */
 #layout{
@@ -260,8 +262,17 @@ input[type=range]::-webkit-slider-thumb{
 .mc-ref{font-size:0.58rem;color:var(--ink3);margin-left:auto;border:1px solid var(--line);padding:1px 5px;}
 
 /* Alerts */
-#alerts{width:190px;min-width:190px;border-left:1px solid var(--line2);display:flex;flex-direction:column;overflow:hidden;}
-.alerts-hd{padding:10px 12px 8px;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink3);border-bottom:1px solid var(--line);}
+#alerts{width:200px;min-width:200px;border-left:1px solid var(--line2);display:flex;flex-direction:column;overflow:hidden;}
+.alerts-hd{
+  padding:8px 12px;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--ink2);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+#alert-clear{
+  font-size:0.58rem;color:var(--ink3);background:transparent;border:none;
+  padding:0;cursor:pointer;letter-spacing:0.05em;
+}
+#alert-clear:hover{color:var(--ink2);}
 #alert-list{flex:1;overflow-y:auto;}
 .al{padding:8px 12px;border-bottom:1px solid var(--line);}
 .al-sym{font-size:0.72rem;font-weight:600;}
@@ -686,7 +697,12 @@ body.zh .en-only{display:none;}
 
   <!-- Alerts -->
   <div id="alerts">
-    <div class="alerts-hd"><span class="en-only">Alert Log</span><span class="zh-only">警報紀錄</span></div>
+    <div class="alerts-hd">
+      <span class="en-only">Alert Log</span><span class="zh-only">警報紀錄</span>
+      <button id="alert-clear" onclick="clearAlerts()">
+        <span class="en-only">Clear</span><span class="zh-only">清除</span>
+      </button>
+    </div>
     <div id="alert-list"><div class="al-empty en-only">No alerts</div><div class="al-empty zh-only" style="display:none;">尚無警報</div></div>
   </div>
 </div>
@@ -869,11 +885,11 @@ function loadChart(sym) {
     autosize: true,
     symbol: 'BINANCE:' + sym + '.P',
     interval: '60',
-    timezone: 'Asia/Taipei', theme: 'light', style: '1', locale: 'en',
-    toolbar_bg: '#ffffff', enable_publishing: false,
+    timezone: 'Asia/Taipei', theme: 'dark', style: '1', locale: 'en',
+    toolbar_bg: '#141412', enable_publishing: false,
     container_id: 'tv-c',
-    backgroundColor: 'rgba(255,255,255,1)',
-    gridColor: 'rgba(220,220,220,0.5)',
+    backgroundColor: 'rgba(12,12,10,1)',
+    gridColor: 'rgba(50,50,46,0.6)',
   });
   wrap.appendChild(sc);
 }
@@ -1023,7 +1039,7 @@ function openModal() {
     if (d.line.token) document.getElementById('line-tok').placeholder = d.line.token;
     setSw('line', d.line.enabled);
     setStatus('line-status', d.line.configured, d.line.enabled);
-    updateNotifyDot(d.telegram.enabled || d.line.enabled);
+    updateNotifyDot(d.telegram.configured || d.line.configured);
   });
   document.getElementById('modal-overlay').classList.add('open');
 }
@@ -1038,9 +1054,17 @@ function setStatus(id, configured, enabled) {
   el.textContent = enabled && configured ? '● Active' : configured ? 'Configured' : 'Not configured';
   el.className = 'ch-status' + (enabled && configured ? ' ok' : '');
 }
-function updateNotifyDot(on) {
+// dot states: 'red'=unconfigured(default) | 'orange'=configured | 'tested'=test passed
+let notifyTested = false;
+function updateNotifyDot(configured) {
   const d = document.getElementById('notify-active-dot');
-  d.className = on ? 'on' : '';
+  if (notifyTested) { d.className = 'tested'; return; }
+  d.className = configured ? 'configured' : '';
+}
+function clearAlerts() {
+  const list = document.getElementById('alert-list');
+  const isZh = document.body.classList.contains('zh');
+  list.innerHTML = `<div class="al-empty en-only">${isZh?'':'No alerts'}</div><div class="al-empty zh-only" style="${isZh?'':'display:none'}">尚無警報</div>`;
 }
 async function testNotify(ch) {
   const btnId = ch==='telegram' ? 'tg-test' : 'line-test';
@@ -1058,6 +1082,7 @@ async function testNotify(ch) {
     }).then(x=>x.json());
     res.textContent = r.ok ? '✓ Sent!' : '✕ ' + (r.error||r.detail||'Failed');
     res.className = 'test-res ' + (r.ok ? 'ok' : 'err');
+    if (r.ok) { notifyTested = true; updateNotifyDot(true); }
   } catch(e) {
     res.textContent = '✕ Network error'; res.className = 'test-res err';
   }
@@ -1083,7 +1108,7 @@ async function saveNotify() {
   btn.classList.add('ok');
   btn.querySelector('.en-only').textContent = '✓ Saved!';
   btn.querySelector('.zh-only').textContent = '✓ 已儲存';
-  updateNotifyDot(notifyState.tg || notifyState.line);
+  updateNotifyDot(true); // token was just saved = configured
   setTimeout(() => {
     btn.classList.remove('ok');
     btn.querySelector('.en-only').textContent = 'Save Settings';
