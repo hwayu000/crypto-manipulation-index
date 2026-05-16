@@ -1,0 +1,18 @@
+{
+  "name": "crypto-manipulation-index",
+  "version": "1.0.0",
+  "description": "Real-time crypto market manipulation index using Binance WebSocket",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node src/test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "node-fetch": "^3.3.2",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "dotenv": "^16.4.7"
+  }
+}

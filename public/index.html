@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Manipulation Index</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg0: #0d0d0f;
+  --bg1: #141417;
+  --bg2: #1c1c21;
+  --bg3: #24242b;
+  --border: #2a2a35;
+  --text0: #f0f0f4;
+  --text1: #9090a0;
+  --text2: #55556a;
+  --blue: #3b82f6;
+  --blue-dim: #1e3a5f;
+  --green: #22c55e;
+  --green-dim: #14532d;
+  --orange: #f59e0b;
+  --orange-dim: #451a03;
+  --red: #ef4444;
+  --red-dim: #450a0a;
+  --cyan: #06b6d4;
+}
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg0); color: var(--text0); font-family: 'Inter', 'Segoe UI', sans-serif; font-size: 13px; display: flex; flex-direction: column; }
+
+/* ── Top Bar ── */
+#topbar {
+  height: 48px; min-height: 48px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px; padding: 0 16px;
+  z-index: 10;
+}
+#topbar .logo { font-size: 0.8rem; letter-spacing: 3px; text-transform: uppercase; color: var(--text1); font-weight: 600; white-space: nowrap; }
+#topbar .logo span { color: var(--blue); }
+#status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text2); flex-shrink: 0; }
+#status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+#status-label { font-size: 0.72rem; color: var(--text1); }
+#active-symbol-badge {
+  margin-left: auto; padding: 4px 12px;
+  background: var(--blue-dim); border: 1px solid var(--blue);
+  border-radius: 20px; color: var(--blue); font-size: 0.75rem; font-weight: 600; letter-spacing: 1px;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Layout ── */
+#layout {
+  flex: 1; display: grid; overflow: hidden;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 1fr 320px;
+  grid-template-areas: "sidebar main" "sidebar bottom";
+}
+
+/* ── Sidebar ── */
+#sidebar {
+  grid-area: sidebar;
+  background: var(--bg1);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-section { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
+.sidebar-section:last-child { border-bottom: none; }
+.section-title {
+  font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text2); margin-bottom: 10px; font-weight: 600;
+}
+
+/* Search */
+#sym-search {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text0); padding: 7px 10px; border-radius: 6px; font-size: 0.8rem;
+  outline: none; margin-bottom: 8px;
+}
+#sym-search:focus { border-color: var(--blue); }
+#sym-search::placeholder { color: var(--text2); }
+#add-sym-btn {
+  width: 100%; background: var(--blue); border: none; color: #fff;
+  padding: 7px 0; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+}
+#add-sym-btn:hover { background: #2563eb; }
+
+/* Top Gainers */
+#gainers-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.gainer-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  border: 1px solid transparent; transition: all 0.15s;
+}
+.gainer-row:hover { background: var(--bg3); }
+.gainer-row.tracked { border-color: var(--blue-dim); background: var(--blue-dim); }
+.gainer-sym { font-weight: 700; font-size: 0.82rem; letter-spacing: 0.5px; }
+.gainer-pct { font-size: 0.75rem; font-weight: 600; color: var(--green); }
+.gainer-price { font-size: 0.7rem; color: var(--text2); }
+.gainer-track-btn {
+  font-size: 0.65rem; padding: 2px 7px; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text1); cursor: pointer;
+}
+.gainer-row.tracked .gainer-track-btn { border-color: var(--blue); color: var(--blue); }
+
+/* Tracked symbols */
+#tracked-list { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; }
+.tracked-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 7px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.tracked-row:hover { background: var(--bg2); }
+.tracked-row.active { background: var(--bg3); border-color: var(--blue); }
+.tracked-sym { font-weight: 700; font-size: 0.82rem; flex: 1; }
+.tracked-index {
+  font-size: 0.78rem; font-weight: 800;
+  min-width: 28px; text-align: right;
+}
+.tracked-level { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.remove-btn {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--bg3); border: none;
+  color: var(--text2); cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; opacity: 0;
+}
+.tracked-row:hover .remove-btn { opacity: 1; }
+
+/* Config panel */
+#config-panel { padding: 14px; border-top: 1px solid var(--border); }
+.config-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.config-label { font-size: 0.75rem; color: var(--text1); }
+.config-val { font-size: 0.75rem; color: var(--text0); font-weight: 600; min-width: 36px; text-align: right; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 4px;
+  background: var(--bg3); border-radius: 2px; outline: none; margin: 4px 0 10px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--blue); cursor: pointer;
+}
+#apply-config-btn {
+  width: 100%; padding: 7px 0; border-radius: 6px;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text1); cursor: pointer; font-size: 0.78rem;
+}
+#apply-config-btn:hover { background: var(--bg3); color: var(--text0); }
+
+/* ── Main Chart Area ── */
+#main {
+  grid-area: main;
+  background: var(--bg0);
+  overflow: hidden;
+  position: relative;
+}
+#tv-container { width: 100%; height: 100%; }
+#tv-container iframe { width: 100%; height: 100%; border: none; }
+#no-symbol-msg {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--text2); font-size: 0.85rem;
+}
+#no-symbol-msg .big { font-size: 2.5rem; opacity: 0.15; }
+
+/* ── Bottom Panel ── */
+#bottom {
+  grid-area: bottom;
+  background: var(--bg1);
+  border-top: 1px solid var(--border);
+  display: flex; gap: 0; overflow: hidden;
+}
+
+/* Index Score */
+#index-score-panel {
+  width: 220px; min-width: 220px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20px 16px; gap: 8px;
+}
+#idx-symbol { font-size: 0.65rem; letter-spacing: 2px; color: var(--text2); text-transform: uppercase; }
+#idx-number { font-size: 5.5rem; font-weight: 900; line-height: 1; transition: color 0.5s; }
+#idx-tag {
+  padding: 4px 14px; border-radius: 16px; font-size: 0.72rem; font-weight: 600;
+  border: 1px solid var(--text2); color: var(--text2); transition: all 0.5s;
+}
+#idx-tag.natural { border-color: var(--green); color: var(--green); }
+#idx-tag.moderate { border-color: var(--orange); color: var(--orange); }
+#idx-tag.high { border-color: var(--orange); color: var(--orange); }
+#idx-tag.extreme { border-color: var(--red); color: var(--red); }
+
+/* Gauge */
+#gauge-wrap { width: 180px; }
+#gauge-track {
+  height: 8px; border-radius: 4px;
+  background: linear-gradient(to right, #22c55e 0%, #84cc16 30%, #eab308 50%, #f97316 65%, #ef4444 80%, #1c1c21 80%);
+  position: relative; margin: 4px 0 6px;
+}
+#gauge-pin {
+  position: absolute; top: -6px; width: 3px; height: 20px;
+  background: #fff; border-radius: 2px; transform: translateX(-50%);
+  transition: left 0.6s cubic-bezier(.4,0,.2,1);
+}
+.gauge-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--text2); }
+
+/* Metric cards */
+#metrics-row {
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0; border-right: 1px solid var(--border);
+}
+.metric-card {
+  padding: 16px 18px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.metric-card:last-child { border-right: none; }
+.metric-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.metric-name { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+.metric-name-zh { font-size: 0.95rem; font-weight: 700; color: var(--text0); }
+.metric-desc { font-size: 0.72rem; color: var(--text2); line-height: 1.4; flex: 1; }
+.metric-footer { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; }
+.metric-val { font-size: 2rem; font-weight: 800; }
+.metric-unit { font-size: 0.7rem; color: var(--text2); }
+.metric-ref { font-size: 0.68rem; color: var(--text2); background: var(--bg2); padding: 2px 7px; border-radius: 4px; }
+
+/* Mini sparkline canvas */
+canvas.sparkline { width: 100%; height: 36px; display: block; margin: 6px 0; }
+
+/* Sparkline bars */
+.mini-bars { display: flex; align-items: flex-end; gap: 3px; height: 36px; margin: 6px 0; }
+.mini-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.3s; }
+
+/* Alert log */
+#alert-panel {
+  width: 240px; min-width: 240px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#alert-panel .section-title { padding: 12px 14px 6px; border-bottom: 1px solid var(--border); }
+#alert-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+.alert-item {
+  padding: 7px 14px; border-bottom: 1px solid var(--border);
+  font-size: 0.72rem; line-height: 1.4;
+}
+.alert-item .alert-sym { font-weight: 700; }
+.alert-item .alert-time { color: var(--text2); font-size: 0.65rem; }
+.alert-item.extreme .alert-sym { color: var(--red); }
+.alert-item.high .alert-sym { color: var(--orange); }
+.alert-item.moderate .alert-sym { color: var(--orange); }
+.alert-empty { padding: 16px 14px; color: var(--text2); font-size: 0.75rem; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
+
+/* Index color utility */
+.idx-natural { color: var(--green); }
+.idx-moderate { color: var(--orange); }
+.idx-high { color: var(--orange); }
+.idx-extreme { color: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div class="logo">Crypto <span>Manipulation</span> Index</div>
+  <div id="status-dot"></div>
+  <div id="status-label">Connecting...</div>
+  <div id="active-symbol-badge">—</div>
+</div>
+
+<!-- Layout -->
+<div id="layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <div id="sidebar">
+
+    <!-- Search & Add -->
+    <div class="sidebar-section">
+      <div class="section-title">Add Symbol</div>
+      <input id="sym-search" placeholder="e.g. SOLUSDT, BTCUSDT" autocomplete="off" />
+      <button id="add-sym-btn" onclick="addCustomSymbol()">+ Track Symbol</button>
+    </div>
+
+    <!-- Top Gainers -->
+    <div class="sidebar-section">
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Top Gainers (24h)</span>
+        <span id="gainers-refresh" style="font-size:0.65rem;color:var(--text2);cursor:pointer;" onclick="refreshGainers()">↻ Refresh</span>
+      </div>
+      <div id="gainers-list"><div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">Loading...</div></div>
+    </div>
+
+    <!-- Tracking List -->
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="section-title">Tracking</div>
+      <div id="tracked-list"></div>
+    </div>
+
+    <!-- Config -->
+    <div id="config-panel">
+      <div class="section-title">Alert Thresholds</div>
+      <div class="config-row">
+        <span class="config-label">Extreme (Index &gt;)</span>
+        <span class="config-val" id="val-extreme">55</span>
+      </div>
+      <input type="range" id="range-extreme" min="40" max="80" value="55"
+        oninput="document.getElementById('val-extreme').textContent=this.value" />
+
+      <div class="config-row">
+        <span class="config-label">High (Index &gt;)</span>
+        <span class="config-val" id="val-high">40</span>
+      </div>
+      <input type="range" id="range-high" min="20" max="60" value="40"
+        oninput="document.getElementById('val-high').textContent=this.value" />
+
+      <div class="config-row">
+        <span class="config-label">Cooldown (min)</span>
+        <span class="config-val" id="val-cooldown">5</span>
+      </div>
+      <input type="range" id="range-cooldown" min="1" max="30" value="5"
+        oninput="document.getElementById('val-cooldown').textContent=this.value" />
+
+      <button id="apply-config-btn" onclick="applyConfig()">Apply Configuration</button>
+    </div>
+  </div>
+
+  <!-- ===== MAIN CHART ===== -->
+  <div id="main">
+    <div id="no-symbol-msg">
+      <div class="big">📊</div>
+      <div>Select a symbol from the sidebar to load chart</div>
+    </div>
+    <div id="tv-container" style="display:none;"></div>
+  </div>
+
+  <!-- ===== BOTTOM PANEL ===== -->
+  <div id="bottom">
+
+    <!-- Index Score -->
+    <div id="index-score-panel">
+      <div id="idx-symbol">—</div>
+      <div id="idx-number" style="color:var(--text2);">—</div>
+      <div id="idx-tag">No Data</div>
+      <div id="gauge-wrap">
+        <div id="gauge-track"><div id="gauge-pin" style="left:0%"></div></div>
+        <div class="gauge-labels">
+          <span>Natural<br>&lt;28</span>
+          <span>High<br>40-55</span>
+          <span style="color:var(--red)">Extreme<br>&gt;55</span>
+        </div>
+      </div>
+      <div style="font-size:0.65rem;color:var(--text2);text-align:center;line-height:1.5;margin-top:4px;">
+        Composite of Hole Collapse,<br>Betti Jump & Max Persistence
+      </div>
+    </div>
+
+    <!-- Three Metric Cards -->
+    <div id="metrics-row">
+
+      <!-- Hole Collapse -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-name" style="color:var(--blue);">Hole Collapse</div>
+          <div class="metric-name-zh">空洞坍塌</div>
+        </div>
+        <div class="metric-desc">
+          Frequency at which short-side resistance walls are forcibly pierced. Higher = resistance vanishes faster.
+        </div>
+        <div class="mini-bars" id="bars-hole">
+          <div class="mini-bar" style="background:var(--bg3);height:35%"></div>
+          <div class="mini-bar" style="background:var(--bg3);height:50%"></div>
+          <div class="mini-bar" style="background:var(--bg3);height:60%"></div>
+          <div class="mini-bar" id="bar-hole-live" style="background:var(--blue);height:70%"></div>
+          <div class="mini-bar" style="background:var(--bg3);height:40%"></div>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-val" id="val-hole" style="color:var(--blue);">—</div>
+          <div class="metric-unit">/ day</div>
+          <div class="metric-ref" id="ref-hole">normal: 2000</div>
+        </div>
+      </div>
+
+      <!-- Betti Jump -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-name" style="color:var(--green);">Betti Jump</div>
+          <div class="metric-name-zh">拓扑重构</div>
+        </div>
+        <div class="metric-desc">
+          Structural topology changes triggered by high-frequency quote stuffing. Measures micro-manipulation frequency.
+        </div>
+        <canvas class="sparkline" id="spark-betti"></canvas>
+        <div class="metric-footer">
+          <div class="metric-val" id="val-betti" style="color:var(--green);">—</div>
+          <div class="metric-unit">/ day</div>
+          <div class="metric-ref">range: 80–150</div>
+        </div>
+      </div>
+
+      <!-- Max Persistence -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-name" style="color:var(--orange);">Max Persistence</div>
+          <div class="metric-name-zh">流动性集中度</div>
+        </div>
+        <div class="metric-desc">
+          Magnetic pull of artificial price anchors. Reflects how long a large order locks price in place (seconds).
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin:6px 0;">
+          <div style="position:relative;width:40px;height:40px;">
+            <svg width="40" height="40" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="var(--bg3)" stroke-width="4"/>
+              <circle id="persist-arc" cx="20" cy="20" r="16" fill="none"
+                stroke="var(--orange)" stroke-width="4"
+                stroke-dasharray="100.5" stroke-dashoffset="100.5"
+                stroke-linecap="round" transform="rotate(-90 20 20)"
+                style="transition:stroke-dashoffset 0.5s"/>
+            </svg>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text2);line-height:1.5;">
+            Persistence<br>duration (s)
+          </div>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-val" id="val-persist" style="color:var(--orange);">—</div>
+          <div class="metric-unit">strength</div>
+          <div class="metric-ref">avg: 160</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Alert Log -->
+    <div id="alert-panel">
+      <div class="section-title">Alert Log</div>
+      <div id="alert-list">
+        <div class="alert-empty">No alerts yet</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──
+const socket = io();
+let activeSymbol = null;
+let trackedSymbols = [];
+let allSnapshots = {};
+let topGainers = [];
+let bettiHistory = [];
+
+// ── Socket Events ──
+socket.on('connect', () => {
+  document.getElementById('status-dot').className = 'live';
+  document.getElementById('status-label').textContent = 'Live';
+});
+socket.on('disconnect', () => {
+  document.getElementById('status-dot').className = '';
+  document.getElementById('status-label').textContent = 'Disconnected';
+});
+
+socket.on('status', (data) => {
+  topGainers = data.topGainers ?? [];
+  trackedSymbols = data.symbols ?? [];
+  renderGainers();
+  renderTracked();
+  for (const snap of (data.snapshots ?? [])) {
+    if (snap.manipulationIndex !== undefined) allSnapshots[snap.symbol] = snap;
+  }
+  if (trackedSymbols.length > 0 && !activeSymbol) selectSymbol(trackedSymbols[0]);
+  else if (activeSymbol) renderMetrics(allSnapshots[activeSymbol]);
+});
+
+socket.on('snapshot', (snap) => {
+  allSnapshots[snap.symbol] = snap;
+  updateTrackedRow(snap);
+  if (snap.symbol === activeSymbol) renderMetrics(snap);
+});
+
+socket.on('alert', addAlert);
+
+socket.on('symbolsUpdated', (symbols) => {
+  trackedSymbols = symbols;
+  renderTracked();
+  if (!symbols.includes(activeSymbol) && symbols.length > 0) selectSymbol(symbols[0]);
+});
+
+socket.on('configUpdated', (cfg) => {
+  console.log('[Config] Updated:', cfg);
+});
+
+// ── Symbol Actions ──
+function addCustomSymbol() {
+  const raw = document.getElementById('sym-search').value.trim();
+  if (!raw) return;
+  const syms = raw.split(/[,\s]+/).map(s => s.toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean);
+  const combined = [...new Set([...trackedSymbols, ...syms])];
+  socket.emit('setSymbols', combined);
+  document.getElementById('sym-search').value = '';
+}
+
+function removeSymbol(sym) {
+  const remaining = trackedSymbols.filter(s => s !== sym);
+  socket.emit('setSymbols', remaining);
+  if (activeSymbol === sym) {
+    activeSymbol = null;
+    document.getElementById('active-symbol-badge').textContent = '—';
+    document.getElementById('tv-container').style.display = 'none';
+    document.getElementById('no-symbol-msg').style.display = 'flex';
+    clearMetrics();
+  }
+}
+
+function toggleGainer(sym) {
+  if (trackedSymbols.includes(sym)) {
+    removeSymbol(sym);
+  } else {
+    const combined = [...new Set([...trackedSymbols, sym])];
+    socket.emit('setSymbols', combined);
+  }
+}
+
+function refreshGainers() {
+  fetch('/api/gainers').then(r => r.json()).then(data => {
+    topGainers = data;
+    renderGainers();
+  });
+}
+
+function selectSymbol(sym) {
+  activeSymbol = sym;
+  document.getElementById('active-symbol-badge').textContent = sym;
+  loadTradingViewChart(sym);
+  renderTrackedActive();
+  if (allSnapshots[sym]) renderMetrics(allSnapshots[sym]);
+}
+
+// ── TradingView ──
+function loadTradingViewChart(symbol) {
+  const container = document.getElementById('tv-container');
+  const noMsg = document.getElementById('no-symbol-msg');
+  noMsg.style.display = 'none';
+  container.style.display = 'block';
+
+  // TradingView widget symbol format: BINANCE:BTCUSDT
+  const tvSym = 'BINANCE:' + symbol;
+
+  container.innerHTML = `
+    <div class="tradingview-widget-container" style="height:100%;width:100%">
+      <div id="tv-widget" style="height:100%;width:100%"></div>
+      <script type="text/javascript">
+        new TradingView.widget({
+          autosize: true,
+          symbol: "${tvSym}",
+          interval: "15",
+          timezone: "Asia/Taipei",
+          theme: "dark",
+          style: "1",
+          locale: "en",
+          toolbar_bg: "#141417",
+          enable_publishing: false,
+          hide_top_toolbar: false,
+          hide_legend: false,
+          save_image: false,
+          container_id: "tv-widget",
+          backgroundColor: "#0d0d0f",
+          gridColor: "rgba(42,42,53,0.5)",
+          studies: [],
+          show_popup_button: false,
+          popup_width: "1000",
+          popup_height: "650"
+        });
+      <\/script>
+    </div>
+    <script src="https://s3.tradingview.com/tv.js"><\/script>
+  `;
+}
+
+// ── Render Functions ──
+function renderGainers() {
+  const el = document.getElementById('gainers-list');
+  if (!topGainers.length) { el.innerHTML = '<div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">No data</div>'; return; }
+  el.innerHTML = topGainers.map(g => {
+    const isTracked = trackedSymbols.includes(g.symbol);
+    const shortSym = g.symbol.replace('USDT', '');
+    return `
+      <div class="gainer-row ${isTracked ? 'tracked' : ''}" onclick="toggleGainer('${g.symbol}')">
+        <div>
+          <div class="gainer-sym">${shortSym}<span style="font-size:0.65rem;color:var(--text2);font-weight:400;">/USDT</span></div>
+          <div class="gainer-price">$${parseFloat(g.price) < 0.01 ? g.price.toFixed(6) : g.price.toFixed(4)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="gainer-pct">+${g.changePercent}%</div>
+          <button class="gainer-track-btn">${isTracked ? '✓ Tracking' : '+ Track'}</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderTracked() {
+  const el = document.getElementById('tracked-list');
+  if (!trackedSymbols.length) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">No symbols tracked</div>';
+    return;
+  }
+  el.innerHTML = trackedSymbols.map(sym => {
+    const snap = allSnapshots[sym];
+    const idx = snap?.manipulationIndex ?? '—';
+    const level = snap?.manipulationLevel ?? '';
+    const cls = levelClass(level);
+    return `
+      <div class="tracked-row ${sym === activeSymbol ? 'active' : ''}" id="trow-${sym}" onclick="selectSymbol('${sym}')">
+        <div class="tracked-sym">${sym.replace('USDT','')}<span style="font-size:0.65rem;color:var(--text2);font-weight:400;">/USDT</span></div>
+        <div>
+          <div class="tracked-index idx-${cls}">${idx}</div>
+          <div class="tracked-level" style="color:var(--text2);">${level}</div>
+        </div>
+        <button class="remove-btn" onclick="event.stopPropagation();removeSymbol('${sym}')">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function renderTrackedActive() {
+  document.querySelectorAll('.tracked-row').forEach(el => {
+    const sym = el.id.replace('trow-', '');
+    el.classList.toggle('active', sym === activeSymbol);
+  });
+}
+
+function updateTrackedRow(snap) {
+  const row = document.getElementById('trow-' + snap.symbol);
+  if (!row) return;
+  const idx = snap.manipulationIndex ?? '—';
+  const level = snap.manipulationLevel ?? '';
+  const cls = levelClass(level);
+  const idxEl = row.querySelector('.tracked-index');
+  const lvlEl = row.querySelector('.tracked-level');
+  if (idxEl) { idxEl.textContent = idx; idxEl.className = `tracked-index idx-${cls}`; }
+  if (lvlEl) lvlEl.textContent = level;
+}
+
+function levelClass(level) {
+  if (!level) return 'natural';
+  return level.toLowerCase();
+}
+
+function levelColor(level) {
+  switch ((level || '').toLowerCase()) {
+    case 'extreme': return 'var(--red)';
+    case 'high': return 'var(--orange)';
+    case 'moderate': return 'var(--orange)';
+    default: return 'var(--green)';
+  }
+}
+
+// ── Metrics Rendering ──
+function renderMetrics(snap) {
+  if (!snap) return;
+  const m = snap.metrics;
+  const idx = snap.manipulationIndex;
+  const level = snap.manipulationLevel;
+  const color = levelColor(level);
+  const cls = levelClass(level);
+
+  // Score panel
+  document.getElementById('idx-symbol').textContent = snap.symbol;
+  document.getElementById('idx-number').textContent = idx;
+  document.getElementById('idx-number').style.color = color;
+
+  const tag = document.getElementById('idx-tag');
+  tag.textContent = levelLabel(level);
+  tag.className = `idx-tag ${cls}`;
+
+  // Gauge
+  const pct = Math.min(95, (idx / 80) * 100);
+  document.getElementById('gauge-pin').style.left = pct + '%';
+
+  // Hole Collapse
+  const holeVal = m.holeCollapse.value;
+  document.getElementById('val-hole').textContent = holeVal.toLocaleString();
+  const holeRatio = Math.min(1, holeVal / 4000);
+  document.getElementById('bar-hole-live').style.height = Math.max(4, holeRatio * 100) + '%';
+
+  // Betti Jump
+  const bettiVal = m.bettiJump.value;
+  document.getElementById('val-betti').textContent = bettiVal.toLocaleString();
+  bettiHistory.push(bettiVal);
+  if (bettiHistory.length > 30) bettiHistory.shift();
+  drawSparkline('spark-betti', bettiHistory, '#22c55e');
+
+  // Max Persistence
+  const persistVal = m.maxPersistence.value;
+  document.getElementById('val-persist').textContent = persistVal.toLocaleString();
+  const persistRatio = Math.min(1, persistVal / 300);
+  const circ = 2 * Math.PI * 16; // r=16
+  const offset = circ * (1 - persistRatio);
+  document.getElementById('persist-arc').setAttribute('stroke-dasharray', circ.toFixed(1));
+  document.getElementById('persist-arc').setAttribute('stroke-dashoffset', offset.toFixed(1));
+}
+
+function clearMetrics() {
+  ['val-hole','val-betti','val-persist','idx-number'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+  document.getElementById('idx-symbol').textContent = '—';
+  document.getElementById('idx-tag').textContent = 'No Data';
+  document.getElementById('idx-tag').className = 'idx-tag';
+  document.getElementById('idx-number').style.color = 'var(--text2)';
+}
+
+function levelLabel(level) {
+  switch ((level || '').toLowerCase()) {
+    case 'extreme': return 'Extreme Manipulation';
+    case 'high': return 'High Manipulation';
+    case 'moderate': return 'Moderate';
+    default: return 'Natural State';
+  }
+}
+
+// ── Sparkline ──
+function drawSparkline(canvasId, data, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  if (data.length < 2) return;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const step = w / (data.length - 1);
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Fill
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((data.length - 1) * step, h);
+  ctx.closePath();
+  ctx.fillStyle = color + '22';
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+// ── Alert Log ──
+function addAlert(alert) {
+  const list = document.getElementById('alert-list');
+  const empty = list.querySelector('.alert-empty');
+  if (empty) empty.remove();
+
+  const time = new Date(alert.timestamp).toLocaleTimeString('en', { hour12: false });
+  const cls = (alert.level || '').toLowerCase();
+  const div = document.createElement('div');
+  div.className = `alert-item ${cls}`;
+  div.innerHTML = `
+    <div class="alert-sym">${alert.symbol} — ${alert.level}</div>
+    <div style="color:var(--text1);margin:2px 0;">Index: <strong>${alert.index}</strong></div>
+    <div class="alert-time">${time}</div>`;
+  list.prepend(div);
+
+  // Keep max 50
+  while (list.children.length > 50) list.lastChild.remove();
+}
+
+// ── Config ──
+function applyConfig() {
+  const cfg = {
+    extremeThreshold: parseInt(document.getElementById('range-extreme').value),
+    highThreshold: parseInt(document.getElementById('range-high').value),
+    cooldownMs: parseInt(document.getElementById('range-cooldown').value) * 60_000,
+  };
+  socket.emit('updateConfig', cfg);
+  const btn = document.getElementById('apply-config-btn');
+  btn.textContent = '✓ Applied';
+  setTimeout(() => btn.textContent = 'Apply Configuration', 2000);
+}
+
+// ── Keyboard ──
+document.getElementById('sym-search').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addCustomSymbol();
+});
+</script>
+</body>
+</html>
