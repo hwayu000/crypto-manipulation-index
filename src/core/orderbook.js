@@ -1,202 +1,183 @@
-/**
- * Order Book Tracker
- * Maintains a local order book snapshot + tracks manipulation signals
- */
+const TOP_LEVELS = 20;
 
-const TOP_LEVELS = 20; // how many price levels to track per side
+// Timeframe windows in ms
+const WINDOWS = { '5m': 5*60*1000, '1h': 60*60*1000, '1d': 24*60*60*1000 };
+const WARMUP_SAMPLES = 20;
 
 class OrderBook {
   constructor(symbol) {
     this.symbol = symbol;
-    this.bids = new Map(); // price -> qty
+    this.bids = new Map();
     this.asks = new Map();
     this.lastUpdateId = 0;
 
-    // Hole Collapse metrics
-    this.holeCollapseCount = 0;
-    this.holeCollapseWindow = []; // timestamps
+    // Per-timeframe event windows
+    this._holes  = []; // timestamps of hole collapse events
+    this._bettis = []; // timestamps of betti jump events
 
-    // Betti Jump metrics (topological structure changes)
-    this.bettiJumpCount = 0;
-    this.bettiJumpWindow = [];
-
-    // Max Persistence metrics (large order magnetism)
+    // Max persistence
     this.maxPersistenceScore = 0;
-    this.largeOrders = new Map(); // price -> {qty, firstSeen, lastSeen}
+    this.largeOrders = new Map();
 
-    // Previous state for diff
+    // Adaptive baselines — stored per timeframe
+    this._baseline = { '5m': null, '1h': null, '1d': null };
+    this._history = { hole: [], betti: [], persist: [] }; // raw values per snapshot
+    this._sampleCount = 0;
+
     this._prevBidLevels = 0;
     this._prevAskLevels = 0;
-    this._prevTopBid = 0;
     this._prevTopAsk = Infinity;
-
-    this._windowMs = 60 * 60 * 1000; // 1-hour rolling window for rate calc
   }
 
-  /**
-   * Apply a depth update from WebSocket
-   * @param {Object} update - Binance depthUpdate event
-   */
   applyUpdate(update) {
-    if (update.U <= this.lastUpdateId) return; // stale
-
-    for (const [price, qty] of update.b) {
-      const p = parseFloat(price);
-      const q = parseFloat(qty);
-      if (q === 0) this.bids.delete(p);
-      else this.bids.set(p, q);
+    if (update.U <= this.lastUpdateId) return;
+    for (const [p, q] of update.b) {
+      const pf = parseFloat(p), qf = parseFloat(q);
+      qf === 0 ? this.bids.delete(pf) : this.bids.set(pf, qf);
     }
-    for (const [price, qty] of update.a) {
-      const p = parseFloat(price);
-      const q = parseFloat(qty);
-      if (q === 0) this.asks.delete(p);
-      else this.asks.set(p, q);
+    for (const [p, q] of update.a) {
+      const pf = parseFloat(p), qf = parseFloat(q);
+      qf === 0 ? this.asks.delete(pf) : this.asks.set(pf, qf);
     }
-
     this.lastUpdateId = update.u;
-    this._detectSignals();
+    this._detect();
   }
 
-  /**
-   * Initialize from REST snapshot
-   */
-  applySnapshot(snapshot) {
-    this.bids.clear();
-    this.asks.clear();
-    for (const [price, qty] of snapshot.bids) {
-      this.bids.set(parseFloat(price), parseFloat(qty));
-    }
-    for (const [price, qty] of snapshot.asks) {
-      this.asks.set(parseFloat(price), parseFloat(qty));
-    }
-    this.lastUpdateId = snapshot.lastUpdateId;
+  applySnapshot(snap) {
+    this.bids.clear(); this.asks.clear();
+    for (const [p, q] of snap.bids) this.bids.set(parseFloat(p), parseFloat(q));
+    for (const [p, q] of snap.asks) this.asks.set(parseFloat(p), parseFloat(q));
+    this.lastUpdateId = snap.lastUpdateId;
   }
 
-  _sortedBids() {
-    return [...this.bids.entries()].sort((a, b) => b[0] - a[0]).slice(0, TOP_LEVELS);
-  }
+  _sortedBids() { return [...this.bids.entries()].sort((a,b)=>b[0]-a[0]).slice(0,TOP_LEVELS); }
+  _sortedAsks() { return [...this.asks.entries()].sort((a,b)=>a[0]-b[0]).slice(0,TOP_LEVELS); }
 
-  _sortedAsks() {
-    return [...this.asks.entries()].sort((a, b) => a[0] - b[0]).slice(0, TOP_LEVELS);
-  }
-
-  _detectSignals() {
+  _detect() {
     const now = Date.now();
-    const bids = this._sortedBids();
-    const asks = this._sortedAsks();
+    const bids = this._sortedBids(), asks = this._sortedAsks();
+    if (!bids.length || !asks.length) return;
 
-    if (bids.length === 0 || asks.length === 0) return;
-
-    const topBid = bids[0][0];
     const topAsk = asks[0][0];
+    if (this._prevTopAsk !== Infinity && topAsk < this._prevTopAsk * 0.9985)
+      this._holes.push(now);
 
-    // === HOLE COLLAPSE ===
-    // Detect when resistance walls (large ask clusters) are pierced rapidly
-    // Proxy: top ask price drops significantly (wall being eaten)
-    if (this._prevTopAsk !== Infinity && topAsk < this._prevTopAsk * 0.9985) {
-      this.holeCollapseWindow.push(now);
-    }
+    const delta = Math.abs(bids.length - this._prevBidLevels) + Math.abs(asks.length - this._prevAskLevels);
+    if (delta >= 5) this._bettis.push(now);
 
-    // === BETTI JUMP ===
-    // Structural change: number of distinct price levels changes abruptly
-    const bidLevels = bids.length;
-    const askLevels = asks.length;
-    const levelDelta = Math.abs(bidLevels - this._prevBidLevels) + Math.abs(askLevels - this._prevAskLevels);
-    if (levelDelta >= 5) {
-      this.bettiJumpWindow.push(now);
-    }
-
-    // === MAX PERSISTENCE (large order tracking) ===
-    const LARGE_ORDER_THRESHOLD_MULTIPLIER = 5; // 5x average qty = large
-    const avgBidQty = bids.reduce((s, [, q]) => s + q, 0) / (bids.length || 1);
-    const avgAskQty = asks.reduce((s, [, q]) => s + q, 0) / (asks.length || 1);
-
-    let persistenceScore = 0;
+    // Max persistence
+    const avgB = bids.reduce((s,[,q])=>s+q,0)/(bids.length||1);
+    const avgA = asks.reduce((s,[,q])=>s+q,0)/(asks.length||1);
+    let persist = 0;
     for (const [price, qty] of [...bids, ...asks]) {
-      const avg = bids.some(([p]) => p === price) ? avgBidQty : avgAskQty;
-      if (qty > avg * LARGE_ORDER_THRESHOLD_MULTIPLIER) {
-        if (!this.largeOrders.has(price)) {
-          this.largeOrders.set(price, { qty, firstSeen: now, lastSeen: now });
-        } else {
-          const lo = this.largeOrders.get(price);
-          lo.lastSeen = now;
-          lo.qty = qty;
-          // Persistence = how long this large order has stayed (seconds)
-          const persistSec = (lo.lastSeen - lo.firstSeen) / 1000;
-          persistenceScore = Math.max(persistenceScore, persistSec);
-        }
-      } else {
-        this.largeOrders.delete(price);
-      }
+      const avg = bids.some(([p])=>p===price) ? avgB : avgA;
+      if (qty > avg * 5) {
+        if (!this.largeOrders.has(price)) this.largeOrders.set(price, { firstSeen: now, lastSeen: now });
+        else { const lo = this.largeOrders.get(price); lo.lastSeen = now; persist = Math.max(persist, (now - lo.firstSeen)/1000); }
+      } else this.largeOrders.delete(price);
     }
-    this.maxPersistenceScore = persistenceScore;
+    this.maxPersistenceScore = persist;
 
-    // Prune old window entries
-    const cutoff = now - this._windowMs;
-    this.holeCollapseWindow = this.holeCollapseWindow.filter(t => t > cutoff);
-    this.bettiJumpWindow = this.bettiJumpWindow.filter(t => t > cutoff);
-
-    // Update counts (events per hour, scaled to /day for display)
-    this.holeCollapseCount = this.holeCollapseWindow.length * 24;
-    this.bettiJumpCount = this.bettiJumpWindow.length * 24;
-
-    this._prevBidLevels = bidLevels;
-    this._prevAskLevels = askLevels;
-    this._prevTopBid = topBid;
+    this._prevBidLevels = bids.length;
+    this._prevAskLevels = asks.length;
     this._prevTopAsk = topAsk;
   }
 
-  /**
-   * Compute the composite manipulation index score (0-100)
-   */
-  getManipulationIndex() {
-    // Normalize each metric to 0-100
-    const holeScore = Math.min(100, (this.holeCollapseCount / 4000) * 100);
-    const bettiScore = Math.min(100, (this.bettiJumpCount / 200) * 100);
-    const persistScore = Math.min(100, (this.maxPersistenceScore / 300) * 100);
-
-    // Weighted composite
-    return Math.round(holeScore * 0.45 + bettiScore * 0.30 + persistScore * 0.25);
+  _prune(arr, windowMs) {
+    const cutoff = Date.now() - windowMs;
+    while (arr.length && arr[0] < cutoff) arr.shift();
   }
 
-  getSnapshot() {
+  // Count events in a given window
+  _count(arr, windowMs) {
+    const cutoff = Date.now() - windowMs;
+    return arr.filter(t => t > cutoff).length;
+  }
+
+  // Rate: events per day equivalent for the given window
+  _rate(arr, windowMs) {
+    return this._count(arr, windowMs) * (86400000 / windowMs);
+  }
+
+  recordSample() {
+    // Prune to max window
+    this._prune(this._holes, WINDOWS['1d']);
+    this._prune(this._bettis, WINDOWS['1d']);
+
+    // Record current 1h rates into history for baseline learning
+    const holeRate = this._rate(this._holes, WINDOWS['1h']);
+    const bettiRate = this._rate(this._bettis, WINDOWS['1h']);
+    const persist = this.maxPersistenceScore;
+
+    this._history.hole.push(holeRate);
+    this._history.betti.push(bettiRate);
+    this._history.persist.push(persist);
+    if (this._history.hole.length > 120) { this._history.hole.shift(); this._history.betti.shift(); this._history.persist.shift(); }
+
+    this._sampleCount++;
+  }
+
+  _p25(arr) {
+    if (!arr.length) return null;
+    const s = [...arr].sort((a,b)=>a-b);
+    return Math.max(s[Math.floor(s.length * 0.25)], 0.1);
+  }
+
+  isWarmedUp() { return this._sampleCount >= WARMUP_SAMPLES; }
+  getWarmup() { return { current: Math.min(this._sampleCount, WARMUP_SAMPLES), total: WARMUP_SAMPLES }; }
+
+  // Compute index for a given timeframe
+  _indexForWindow(tf) {
+    if (!this.isWarmedUp()) return null;
+    const wms = WINDOWS[tf];
+    const hNow = this._rate(this._holes, wms);
+    const bNow = this._rate(this._bettis, wms);
+    const pNow = this.maxPersistenceScore;
+
+    const hBase = this._p25(this._history.hole) ?? 1;
+    const bBase = this._p25(this._history.betti) ?? 1;
+    const pBase = this._p25(this._history.persist) ?? 1;
+
+    const hScore = Math.min(100, Math.max(0, ((hNow/hBase) - 1) * 50));
+    const bScore = Math.min(100, Math.max(0, ((bNow/bBase) - 1) * 50));
+    const pScore = Math.min(100, Math.max(0, ((pNow/pBase) - 1) * 33));
+
+    return Math.round(hScore*0.45 + bScore*0.30 + pScore*0.25);
+  }
+
+  getSnapshot(tf = '1h') {
+    this.recordSample();
+    const wms = WINDOWS[tf] ?? WINDOWS['1h'];
+    const hVal = this._rate(this._holes, wms);
+    const bVal = this._rate(this._bettis, wms);
+    const pVal = this.maxPersistenceScore;
+    const idx = this._indexForWindow(tf);
+    const level = idx === null ? null : idx > 55 ? 'Extreme' : idx > 40 ? 'High' : idx > 28 ? 'Moderate' : 'Natural';
+
     const bids = this._sortedBids();
     const asks = this._sortedAsks();
-    const index = this.getManipulationIndex();
 
     return {
       symbol: this.symbol,
       timestamp: Date.now(),
-      spread: asks.length && bids.length ? asks[0][0] - bids[0][0] : null,
+      tf,
       topBid: bids[0]?.[0] ?? null,
       topAsk: asks[0]?.[0] ?? null,
-      bids: bids.slice(0, 5),
-      asks: asks.slice(0, 5),
+      warmedUp: this.isWarmedUp(),
+      warmup: this.getWarmup(),
       metrics: {
-        holeCollapse: {
-          value: this.holeCollapseCount,
-          normalRange: 2000,
-          label: 'Hole Collapse',
-          labelZh: '空洞坍塌',
-          unit: 'times/day',
-        },
-        bettiJump: {
-          value: this.bettiJumpCount,
-          normalRange: '80-150',
-          label: 'Betti Jump',
-          labelZh: '拓扑重构',
-          unit: 'times/day',
-        },
-        maxPersistence: {
-          value: Math.round(this.maxPersistenceScore),
-          avgValue: 160,
-          label: 'Max Persistence',
-          labelZh: '流动性集中度',
-          unit: 'strength',
-        },
+        holeCollapse: { value: Math.round(hVal), baseline: this._p25(this._history.hole) },
+        bettiJump:    { value: Math.round(bVal), baseline: this._p25(this._history.betti) },
+        maxPersistence: { value: Math.round(pVal), baseline: this._p25(this._history.persist) },
       },
-      manipulationIndex: index,
-      manipulationLevel: index > 55 ? 'Extreme' : index > 40 ? 'High' : index > 28 ? 'Moderate' : 'Natural',
+      manipulationIndex: idx,
+      manipulationLevel: level,
+      // Pre-compute all timeframes for the client
+      allTf: {
+        '5m': this._indexForWindow('5m'),
+        '1h': this._indexForWindow('1h'),
+        '1d': this._indexForWindow('1d'),
+      },
     };
   }
 }

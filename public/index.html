@@ -2,806 +2,1116 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crypto Manipulation Index</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CMI · Crypto Manipulation Index</title>
 <script src="/socket.io/socket.io.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@200;400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-/* ── Reset & Base ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg0: #0d0d0f;
-  --bg1: #141417;
-  --bg2: #1c1c21;
-  --bg3: #24242b;
-  --border: #2a2a35;
-  --text0: #f0f0f4;
-  --text1: #9090a0;
-  --text2: #55556a;
-  --blue: #3b82f6;
-  --blue-dim: #1e3a5f;
-  --green: #22c55e;
-  --green-dim: #14532d;
-  --orange: #f59e0b;
-  --orange-dim: #451a03;
-  --red: #ef4444;
-  --red-dim: #450a0a;
-  --cyan: #06b6d4;
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --ink:#f0f0ed;
+  --ink2:#7a7a78;
+  --ink3:#3a3a38;
+  --ink4:#1e1e1c;
+  --paper:#0c0c0a;
+  --paper2:#141412;
+  --paper3:#1c1c1a;
+  --paper4:#242422;
+  --paper5:#2c2c2a;
+  --line:rgba(240,240,237,0.08);
+  --line2:rgba(240,240,237,0.14);
+  --blue:#4a7ef5;
+  --green:#34c97a;
+  --orange:#e8a020;
+  --red:#e05050;
+  --cyan:#22c5d8;
+  --serif:'Playfair Display',Georgia,serif;
+  --sans:'Inter','Helvetica Neue',sans-serif;
 }
-html, body { height: 100%; overflow: hidden; }
-body { background: var(--bg0); color: var(--text0); font-family: 'Inter', 'Segoe UI', sans-serif; font-size: 13px; display: flex; flex-direction: column; }
+html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans);}
+button{cursor:pointer;font-family:var(--sans);}
+input{font-family:var(--sans);}
 
-/* ── Top Bar ── */
-#topbar {
-  height: 48px; min-height: 48px;
-  background: var(--bg1);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 16px; padding: 0 16px;
-  z-index: 10;
+/* ── TOPBAR ── */
+#bar{
+  height:42px;background:var(--paper2);border-bottom:1px solid var(--line2);
+  display:flex;align-items:center;padding:0 20px;gap:16px;position:relative;z-index:30;
 }
-#topbar .logo { font-size: 0.8rem; letter-spacing: 3px; text-transform: uppercase; color: var(--text1); font-weight: 600; white-space: nowrap; }
-#topbar .logo span { color: var(--blue); }
-#status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text2); flex-shrink: 0; }
-#status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
-#status-label { font-size: 0.72rem; color: var(--text1); }
-#active-symbol-badge {
-  margin-left: auto; padding: 4px 12px;
-  background: var(--blue-dim); border: 1px solid var(--blue);
-  border-radius: 20px; color: var(--blue); font-size: 0.75rem; font-weight: 600; letter-spacing: 1px;
+.bar-logo{
+  font-family:var(--serif);font-weight:200;font-size:0.95rem;
+  letter-spacing:0.15em;color:var(--ink);white-space:nowrap;
 }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.bar-logo b{font-weight:700;color:var(--ink);}
+.bar-logo small{font-family:var(--sans);font-size:0.55rem;font-weight:400;color:var(--ink2);letter-spacing:0.2em;margin-left:6px;vertical-align:middle;}
+.bar-sep{width:1px;height:18px;background:var(--line2);}
+.bar-live{display:flex;align-items:center;gap:5px;font-size:0.65rem;color:var(--ink2);}
+#live-dot{width:5px;height:5px;border-radius:50%;background:var(--ink3);}
+#live-dot.on{background:var(--green);box-shadow:0 0 6px var(--green);}
+.bar-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+#lang-btn{
+  padding:3px 10px;background:transparent;border:1px solid var(--line2);
+  color:var(--ink2);font-size:0.65rem;letter-spacing:0.1em;
+}
+#lang-btn:hover{border-color:var(--line2);color:var(--ink);}
+#notify-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;background:transparent;border:1px solid var(--line2);
+  color:var(--ink2);font-size:0.65rem;letter-spacing:0.1em;position:relative;
+}
+#notify-btn:hover{border-color:var(--line2);color:var(--ink);}
+#notify-active-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--ink3);
+}
+#notify-active-dot.on{background:var(--green);box-shadow:0 0 5px var(--green);}
 
-/* ── Layout ── */
-#layout {
-  flex: 1; display: grid; overflow: hidden;
-  grid-template-columns: 280px 1fr;
-  grid-template-rows: 1fr 320px;
-  grid-template-areas: "sidebar main" "sidebar bottom";
+/* ── LAYOUT ── */
+#layout{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  grid-template-rows:1fr 280px;
+  grid-template-areas:"side chart" "side bottom";
+  height:calc(100vh - 42px);
 }
 
-/* ── Sidebar ── */
-#sidebar {
-  grid-area: sidebar;
-  background: var(--bg1);
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  overflow: hidden;
+/* ── SIDEBAR ── */
+#side{
+  grid-area:side;background:var(--paper2);
+  border-right:1px solid var(--line2);
+  display:flex;flex-direction:column;overflow:hidden;
 }
-.sidebar-section { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
-.sidebar-section:last-child { border-bottom: none; }
-.section-title {
-  font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase;
-  color: var(--text2); margin-bottom: 10px; font-weight: 600;
+.sb{padding:14px 14px 12px;border-bottom:1px solid var(--line);}
+.sb-hd{
+  font-size:0.55rem;letter-spacing:0.25em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;
 }
+.sb-act{font-size:0.6rem;color:var(--ink3);letter-spacing:0.1em;}
+.sb-act:hover{color:var(--ink2);}
 
 /* Search */
-#sym-search {
-  width: 100%; background: var(--bg2); border: 1px solid var(--border);
-  color: var(--text0); padding: 7px 10px; border-radius: 6px; font-size: 0.8rem;
-  outline: none; margin-bottom: 8px;
+.search-box{position:relative;}
+.search-box input{
+  width:100%;background:var(--paper3);border:1px solid var(--line2);
+  color:var(--ink);padding:7px 10px 7px 30px;font-size:0.75rem;outline:none;
 }
-#sym-search:focus { border-color: var(--blue); }
-#sym-search::placeholder { color: var(--text2); }
-#add-sym-btn {
-  width: 100%; background: var(--blue); border: none; color: #fff;
-  padding: 7px 0; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+.search-box input:focus{border-color:rgba(74,126,245,0.5);}
+.search-box input::placeholder{color:var(--ink3);}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ink3);font-size:0.75rem;pointer-events:none;}
+#search-results{
+  position:absolute;top:100%;left:0;right:0;z-index:50;
+  background:var(--paper3);border:1px solid var(--line2);border-top:none;
+  max-height:180px;overflow-y:auto;display:none;
 }
-#add-sym-btn:hover { background: #2563eb; }
+.sr-item{
+  padding:8px 10px;font-size:0.75rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--line);
+}
+.sr-item:hover{background:var(--paper4);}
+.sr-item.tracked{color:var(--blue);}
+.sr-tag{font-size:0.6rem;color:var(--ink3);}
 
-/* Top Gainers */
-#gainers-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
-.gainer-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 7px 10px; border-radius: 7px; cursor: pointer;
-  border: 1px solid transparent; transition: all 0.15s;
+/* Gainers */
+.gainers-ctrl{display:flex;gap:4px;}
+.sort-pill{
+  font-size:0.58rem;padding:2px 7px;letter-spacing:0.1em;
+  background:transparent;border:1px solid var(--line);color:var(--ink3);
 }
-.gainer-row:hover { background: var(--bg3); }
-.gainer-row.tracked { border-color: var(--blue-dim); background: var(--blue-dim); }
-.gainer-sym { font-weight: 700; font-size: 0.82rem; letter-spacing: 0.5px; }
-.gainer-pct { font-size: 0.75rem; font-weight: 600; color: var(--green); }
-.gainer-price { font-size: 0.7rem; color: var(--text2); }
-.gainer-track-btn {
-  font-size: 0.65rem; padding: 2px 7px; border-radius: 10px;
-  border: 1px solid var(--border); background: transparent; color: var(--text1); cursor: pointer;
+.sort-pill.on{border-color:var(--blue);color:var(--blue);}
+#gainers-list{display:flex;flex-direction:column;max-height:180px;overflow-y:auto;}
+.gi{
+  display:flex;align-items:center;padding:7px 10px;
+  border-bottom:1px solid var(--line);cursor:pointer;gap:8px;
 }
-.gainer-row.tracked .gainer-track-btn { border-color: var(--blue); color: var(--blue); }
+.gi:hover{background:var(--paper3);}
+.gi.trk{background:rgba(74,126,245,0.04);}
+.gi-sym{font-size:0.78rem;font-weight:600;flex:1;}
+.gi-sub{font-size:0.6rem;color:var(--ink3);}
+.gi-pct{font-size:0.75rem;font-weight:700;}
+.gi-pct.up{color:var(--green);}
+.gi-pct.dn{color:var(--red);}
+.gi-dot{width:5px;height:5px;border-radius:50%;background:var(--ink3);flex-shrink:0;}
+.gi.trk .gi-dot{background:var(--blue);}
 
-/* Tracked symbols */
-#tracked-list { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; }
-.tracked-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border-radius: 7px; cursor: pointer;
-  border: 1px solid transparent;
+/* Tracking */
+#tracked-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+#tracked-list{flex:1;overflow-y:auto;}
+.ti{
+  display:flex;align-items:center;padding:8px 14px;
+  border-bottom:1px solid var(--line);cursor:pointer;gap:8px;
 }
-.tracked-row:hover { background: var(--bg2); }
-.tracked-row.active { background: var(--bg3); border-color: var(--blue); }
-.tracked-sym { font-weight: 700; font-size: 0.82rem; flex: 1; }
-.tracked-index {
-  font-size: 0.78rem; font-weight: 800;
-  min-width: 28px; text-align: right;
+.ti:hover{background:var(--paper3);}
+.ti.active{background:var(--paper4);}
+.ti-sym{font-weight:600;font-size:0.8rem;flex:1;}
+.ti-sym small{color:var(--ink3);font-weight:400;font-size:0.62rem;}
+.ti-right{text-align:right;min-width:44px;}
+.ti-idx{font-size:0.85rem;font-weight:800;}
+.ti-lvl{font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink3);}
+.ti-wu{font-size:0.6rem;color:var(--ink3);}
+.ti-del{
+  width:14px;height:14px;background:transparent;border:1px solid var(--line);
+  color:var(--ink3);font-size:0.6rem;opacity:0;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
 }
-.tracked-level { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; }
-.remove-btn {
-  width: 16px; height: 16px; border-radius: 50%; background: var(--bg3); border: none;
-  color: var(--text2); cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; opacity: 0;
-}
-.tracked-row:hover .remove-btn { opacity: 1; }
+.ti:hover .ti-del{opacity:1;}
+.ti-del:hover{border-color:var(--red);color:var(--red);}
 
-/* Config panel */
-#config-panel { padding: 14px; border-top: 1px solid var(--border); }
-.config-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.config-label { font-size: 0.75rem; color: var(--text1); }
-.config-val { font-size: 0.75rem; color: var(--text0); font-weight: 600; min-width: 36px; text-align: right; }
-input[type=range] {
-  -webkit-appearance: none; width: 100%; height: 4px;
-  background: var(--bg3); border-radius: 2px; outline: none; margin: 4px 0 10px;
+/* Config */
+#cfg{padding:14px;border-top:1px solid var(--line2);}
+.cfg-hd{font-size:0.55rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;}
+.cfg-row{display:flex;justify-content:space-between;margin-bottom:2px;}
+.cfg-lbl{font-size:0.68rem;color:var(--ink2);}
+.cfg-val{font-size:0.68rem;color:var(--ink);font-weight:600;}
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:2px;background:var(--paper5);
+  outline:none;margin:5px 0 10px;
 }
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--blue); cursor: pointer;
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:10px;height:10px;background:var(--blue);
 }
-#apply-config-btn {
-  width: 100%; padding: 7px 0; border-radius: 6px;
-  background: var(--bg2); border: 1px solid var(--border);
-  color: var(--text1); cursor: pointer; font-size: 0.78rem;
+#cfg-apply{
+  width:100%;padding:7px;background:transparent;border:1px solid var(--line2);
+  color:var(--ink2);font-size:0.68rem;letter-spacing:0.1em;margin-top:4px;
 }
-#apply-config-btn:hover { background: var(--bg3); color: var(--text0); }
+#cfg-apply:hover{border-color:var(--line2);color:var(--ink);}
+#cfg-apply.ok{border-color:var(--green);color:var(--green);}
 
-/* ── Main Chart Area ── */
-#main {
-  grid-area: main;
-  background: var(--bg0);
-  overflow: hidden;
-  position: relative;
+/* ── CHART AREA ── */
+#chart{
+  grid-area:chart;background:var(--paper);overflow:hidden;position:relative;
 }
-#tv-container { width: 100%; height: 100%; }
-#tv-container iframe { width: 100%; height: 100%; border: none; }
-#no-symbol-msg {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 8px;
-  color: var(--text2); font-size: 0.85rem;
+#tv-wrap{width:100%;height:100%;display:none;}
+#chart-ph{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;
+  color:var(--ink3);font-family:var(--serif);
 }
-#no-symbol-msg .big { font-size: 2.5rem; opacity: 0.15; }
+.ph-big{font-size:3rem;font-weight:200;opacity:0.08;}
+.ph-txt{font-size:0.75rem;font-weight:300;letter-spacing:0.15em;}
 
-/* ── Bottom Panel ── */
-#bottom {
-  grid-area: bottom;
-  background: var(--bg1);
-  border-top: 1px solid var(--border);
-  display: flex; gap: 0; overflow: hidden;
+/* TradingView background override — make chart white */
+#tv-wrap iframe { background: #fff !important; }
+
+/* ── BOTTOM PANEL ── */
+#bottom{
+  grid-area:bottom;background:var(--paper2);border-top:1px solid var(--line2);
+  display:flex;overflow:hidden;
 }
 
-/* Index Score */
-#index-score-panel {
-  width: 220px; min-width: 220px;
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 20px 16px; gap: 8px;
+/* Index block */
+#idx-block{
+  width:190px;min-width:190px;border-right:1px solid var(--line2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:16px 14px;gap:6px;
 }
-#idx-symbol { font-size: 0.65rem; letter-spacing: 2px; color: var(--text2); text-transform: uppercase; }
-#idx-number { font-size: 5.5rem; font-weight: 900; line-height: 1; transition: color 0.5s; }
-#idx-tag {
-  padding: 4px 14px; border-radius: 16px; font-size: 0.72rem; font-weight: 600;
-  border: 1px solid var(--text2); color: var(--text2); transition: all 0.5s;
+#idx-sym{font-size:0.55rem;letter-spacing:0.25em;color:var(--ink3);text-transform:uppercase;}
+/* Warmup ring */
+#warmup-ring{position:relative;display:none;align-items:center;justify-content:center;}
+#warmup-ring svg{transform:rotate(-90deg);}
+#warmup-track{fill:none;stroke:var(--paper4);stroke-width:4;}
+#warmup-fill{fill:none;stroke:var(--blue);stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset 0.4s;}
+#warmup-label{
+  position:absolute;display:flex;flex-direction:column;align-items:center;
+  font-size:0.55rem;color:var(--ink3);
 }
-#idx-tag.natural { border-color: var(--green); color: var(--green); }
-#idx-tag.moderate { border-color: var(--orange); color: var(--orange); }
-#idx-tag.high { border-color: var(--orange); color: var(--orange); }
-#idx-tag.extreme { border-color: var(--red); color: var(--red); }
+#warmup-num{font-size:1.1rem;font-weight:700;color:var(--ink2);line-height:1;}
+/* Big number */
+#idx-num{
+  font-family:var(--serif);font-weight:200;font-size:4.8rem;line-height:1;
+  color:var(--ink3);transition:color 0.4s;display:block;
+}
+#idx-tag{
+  font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;
+  padding:3px 10px;border:1px solid var(--ink3);color:var(--ink3);
+  transition:all 0.4s;
+}
+#idx-tag.natural{border-color:var(--green);color:var(--green);}
+#idx-tag.moderate{border-color:var(--orange);color:var(--orange);}
+#idx-tag.high{border-color:var(--orange);color:var(--orange);}
+#idx-tag.extreme{border-color:var(--red);color:var(--red);}
+/* Gauge — 1px hairline */
+#gauge{width:160px;}
+#gauge-track{
+  height:1px;background:var(--line2);position:relative;margin:8px 0 4px;
+}
+#gauge-fill{height:100%;background:var(--ink2);transition:width 0.5s;}
+#gauge-pin{position:absolute;top:-3px;width:1px;height:7px;background:var(--ink);transform:translateX(-50%);transition:left 0.5s;}
+.gauge-lbl{display:flex;justify-content:space-between;font-size:0.55rem;color:var(--ink3);letter-spacing:0.08em;}
+/* TF mini indicators */
+#tf-mini{display:flex;gap:6px;margin-top:4px;}
+.tf-dot{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.tf-dot-lbl{font-size:0.5rem;color:var(--ink3);letter-spacing:0.1em;}
+.tf-dot-val{font-size:0.7rem;font-weight:700;color:var(--ink3);}
 
-/* Gauge */
-#gauge-wrap { width: 180px; }
-#gauge-track {
-  height: 8px; border-radius: 4px;
-  background: linear-gradient(to right, #22c55e 0%, #84cc16 30%, #eab308 50%, #f97316 65%, #ef4444 80%, #1c1c21 80%);
-  position: relative; margin: 4px 0 6px;
-}
-#gauge-pin {
-  position: absolute; top: -6px; width: 3px; height: 20px;
-  background: #fff; border-radius: 2px; transform: translateX(-50%);
-  transition: left 0.6s cubic-bezier(.4,0,.2,1);
-}
-.gauge-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--text2); }
+/* Metrics */
+#metrics{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;}
+.mc{padding:14px 16px;border-right:1px solid var(--line2);display:flex;flex-direction:column;gap:4px;overflow:hidden;}
+.mc:last-child{border-right:none;}
+.mc-name{font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;font-weight:600;}
+.mc-zh{font-family:var(--serif);font-size:1rem;font-weight:200;color:var(--ink2);margin-bottom:2px;/* zh name, shown in zh mode */}
+.mc-desc{font-size:0.65rem;color:var(--ink3);line-height:1.5;flex:1;}
+.mc-vis{height:30px;margin:4px 0;}
+.mbars{display:flex;align-items:flex-end;gap:2px;height:30px;}
+.mbar{flex:1;min-height:1px;transition:height 0.3s;}
+.mc-foot{display:flex;align-items:baseline;gap:6px;margin-top:4px;}
+.mc-val{font-family:var(--serif);font-weight:200;font-size:2.2rem;line-height:1;}
+.mc-unit{font-size:0.58rem;color:var(--ink3);}
+.mc-ref{font-size:0.58rem;color:var(--ink3);margin-left:auto;border:1px solid var(--line);padding:1px 5px;}
 
-/* Metric cards */
-#metrics-row {
-  flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr;
-  gap: 0; border-right: 1px solid var(--border);
-}
-.metric-card {
-  padding: 16px 18px;
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; justify-content: space-between;
-}
-.metric-card:last-child { border-right: none; }
-.metric-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
-.metric-name { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
-.metric-name-zh { font-size: 0.95rem; font-weight: 700; color: var(--text0); }
-.metric-desc { font-size: 0.72rem; color: var(--text2); line-height: 1.4; flex: 1; }
-.metric-footer { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; }
-.metric-val { font-size: 2rem; font-weight: 800; }
-.metric-unit { font-size: 0.7rem; color: var(--text2); }
-.metric-ref { font-size: 0.68rem; color: var(--text2); background: var(--bg2); padding: 2px 7px; border-radius: 4px; }
+/* Alerts */
+#alerts{width:190px;min-width:190px;border-left:1px solid var(--line2);display:flex;flex-direction:column;overflow:hidden;}
+.alerts-hd{padding:10px 12px 8px;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink3);border-bottom:1px solid var(--line);}
+#alert-list{flex:1;overflow-y:auto;}
+.al{padding:8px 12px;border-bottom:1px solid var(--line);}
+.al-sym{font-size:0.72rem;font-weight:600;}
+.al-sym.extreme{color:var(--red);}
+.al-sym.high,.al-sym.moderate{color:var(--orange);}
+.al-body{font-size:0.65rem;color:var(--ink2);margin:1px 0;}
+.al-time{font-size:0.58rem;color:var(--ink3);}
+.al-empty{padding:14px 12px;font-size:0.65rem;color:var(--ink3);}
 
-/* Mini sparkline canvas */
-canvas.sparkline { width: 100%; height: 36px; display: block; margin: 6px 0; }
-
-/* Sparkline bars */
-.mini-bars { display: flex; align-items: flex-end; gap: 3px; height: 36px; margin: 6px 0; }
-.mini-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.3s; }
-
-/* Alert log */
-#alert-panel {
-  width: 240px; min-width: 240px;
-  display: flex; flex-direction: column; overflow: hidden;
+/* ── NOTIFY MODAL ── */
+#modal-overlay{
+  display:none;position:fixed;inset:0;z-index:100;
+  background:rgba(12,12,10,0.85);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;
 }
-#alert-panel .section-title { padding: 12px 14px 6px; border-bottom: 1px solid var(--border); }
-#alert-list { flex: 1; overflow-y: auto; padding: 6px 0; }
-.alert-item {
-  padding: 7px 14px; border-bottom: 1px solid var(--border);
-  font-size: 0.72rem; line-height: 1.4;
+#modal-overlay.open{display:flex;}
+#modal{
+  background:var(--paper2);border:1px solid var(--line2);
+  width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;
 }
-.alert-item .alert-sym { font-weight: 700; }
-.alert-item .alert-time { color: var(--text2); font-size: 0.65rem; }
-.alert-item.extreme .alert-sym { color: var(--red); }
-.alert-item.high .alert-sym { color: var(--orange); }
-.alert-item.moderate .alert-sym { color: var(--orange); }
-.alert-empty { padding: 16px 14px; color: var(--text2); font-size: 0.75rem; }
+.modal-hd{
+  padding:18px 20px 14px;border-bottom:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.modal-title{font-family:var(--serif);font-weight:200;font-size:1.1rem;letter-spacing:0.1em;}
+.modal-close{
+  width:24px;height:24px;background:transparent;border:1px solid var(--line);
+  color:var(--ink3);font-size:0.75rem;display:flex;align-items:center;justify-content:center;
+}
+.modal-close:hover{border-color:var(--line2);color:var(--ink);}
+.modal-body{padding:16px 20px;display:flex;flex-direction:column;gap:16px;}
+
+/* Channel card */
+.ch{border:1px solid var(--line2);}
+.ch-hd{
+  padding:10px 14px;background:var(--paper3);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.ch-name{font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:8px;}
+.ch-status{font-size:0.58rem;letter-spacing:0.1em;padding:1px 6px;border:1px solid var(--line);}
+.ch-status.ok{border-color:var(--green);color:var(--green);}
+.toggle-row{display:flex;align-items:center;gap:7px;}
+.toggle-lbl{font-size:0.62rem;color:var(--ink2);}
+.sw{width:32px;height:16px;background:var(--paper5);border:1px solid var(--line2);position:relative;cursor:pointer;flex-shrink:0;}
+.sw.on{background:var(--blue);border-color:var(--blue);}
+.sw::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--ink2);transition:transform 0.2s;}
+.sw.on::after{transform:translateX(16px);background:#fff;}
+.ch-fields{padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.f-row{display:flex;flex-direction:column;gap:3px;}
+.f-lbl{font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink3);}
+.f-inp{
+  background:var(--paper3);border:1px solid var(--line2);color:var(--ink);
+  padding:7px 10px;font-size:0.75rem;outline:none;width:100%;
+}
+.f-inp:focus{border-color:rgba(74,126,245,0.5);}
+.f-inp::placeholder{color:var(--ink3);}
+.f-hint{font-size:0.6rem;color:var(--ink3);line-height:1.5;}
+.f-hint a{color:var(--cyan);text-decoration:none;}
+.ch-ft{padding:10px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.test-btn{
+  padding:5px 12px;background:transparent;border:1px solid var(--line2);
+  color:var(--ink2);font-size:0.68rem;letter-spacing:0.08em;
+}
+.test-btn:hover{border-color:var(--line2);color:var(--ink);}
+.test-btn:disabled{opacity:0.4;}
+.test-res{font-size:0.65rem;}
+.test-res.ok{color:var(--green);}
+.test-res.err{color:var(--red);}
+.modal-save{
+  padding:10px;background:var(--blue);border:none;color:#fff;
+  font-size:0.75rem;font-weight:600;letter-spacing:0.1em;width:100%;
+}
+.modal-save:hover{background:#3d6ee0;}
+.modal-save.ok{background:var(--green);}
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
+::-webkit-scrollbar{width:2px;}
+::-webkit-scrollbar-thumb{background:var(--paper5);}
 
-/* Index color utility */
-.idx-natural { color: var(--green); }
-.idx-moderate { color: var(--orange); }
-.idx-high { color: var(--orange); }
-.idx-extreme { color: var(--red); }
+/* Language */
+.zh-only{display:none;}
+body.zh .zh-only{display:initial;}
+body.zh .en-only{display:none;}
+
+/* ── RWD MOBILE ── */
+@media(max-width:768px){
+  html,body{overflow:auto;height:auto;}
+
+  #bar{padding:0 12px;gap:10px;height:44px;}
+  .bar-logo{font-size:0.75rem;}
+  .bar-logo small{display:none;}
+  .bar-sep{display:none;}
+
+  #layout{
+    display:flex;flex-direction:column;height:auto;
+    grid-template-areas:none;grid-template-columns:none;grid-template-rows:none;
+  }
+
+  /* Sidebar becomes top horizontal strip on mobile */
+  #side{
+    width:100%;border-right:none;border-bottom:1px solid var(--line2);
+    overflow:visible;flex-shrink:0;
+  }
+  /* Collapse gainers and tracking to smaller heights */
+  #gainers-list{max-height:120px;}
+  #tracked-wrap{flex:none;}
+  #tracked-list{max-height:110px;overflow-y:auto;}
+  #cfg{padding:10px 12px;}
+  input[type=range]{margin:3px 0 7px;}
+
+  /* Chart fills screen width, fixed height */
+  #chart{
+    width:100%;height:55vw;min-height:260px;max-height:380px;
+    flex-shrink:0;position:relative;
+  }
+
+  /* Bottom: stack vertically */
+  #bottom{
+    flex-direction:column;height:auto;border-top:1px solid var(--line2);
+  }
+  #idx-block{
+    width:100%;flex-direction:row;flex-wrap:wrap;
+    justify-content:center;gap:12px;padding:14px 16px;
+    border-right:none;border-bottom:1px solid var(--line2);
+  }
+  #idx-num{font-size:3.2rem;}
+  #warmup-ring{width:64px;height:64px;}
+  #warmup-ring svg{width:64px;height:64px;}
+  #gauge{width:140px;}
+  #tf-mini{gap:12px;}
+
+  #metrics{
+    grid-template-columns:1fr;border-right:none;
+  }
+  .mc{border-right:none;border-bottom:1px solid var(--line2);}
+  .mc:last-child{border-bottom:none;}
+  .mc-val{font-size:1.8rem;}
+
+  #alerts{
+    width:100%;border-left:none;border-top:1px solid var(--line2);
+    max-height:180px;
+  }
+
+  /* Modal full screen on mobile */
+  #modal{width:100%;max-width:100%;border-radius:0;min-height:100vh;overflow-y:auto;}
+  #modal-overlay{align-items:flex-start;}
+}
+
+@media(max-width:480px){
+  .bar-logo b{font-size:0.8rem;}
+  #side .sb{padding:10px 10px 8px;}
+  .gi{padding:6px 8px;}
+  .ti{padding:6px 10px;}
+  #idx-block{padding:10px 12px;}
+  #idx-num{font-size:2.6rem;}
+  #metrics{grid-template-columns:1fr 1fr;}
+  .mc{padding:10px 12px;}
+}
 </style>
 </head>
 <body>
 
-<!-- Top Bar -->
-<div id="topbar">
-  <div class="logo">Crypto <span>Manipulation</span> Index</div>
-  <div id="status-dot"></div>
-  <div id="status-label">Connecting...</div>
-  <div id="active-symbol-badge">—</div>
+<!-- TOPBAR -->
+<div id="bar">
+  <div class="bar-logo"><b>CMI</b> · Crypto Manipulation Index<small>by Ashdata</small></div>
+  <div class="bar-sep"></div>
+  <div class="bar-live"><div id="live-dot"></div><span id="live-lbl">connecting</span></div>
+  <div class="bar-right">
+    <button id="lang-btn" onclick="toggleLang()">中文</button>
+    <button id="notify-btn" onclick="openModal()">
+      <div id="notify-active-dot"></div>
+      <span class="en-only">Notifications</span><span class="zh-only">通知設定</span>
+    </button>
+  </div>
 </div>
 
-<!-- Layout -->
+<!-- NOTIFY MODAL -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+<div id="modal">
+  <div class="modal-hd">
+    <div class="modal-title en-only">Notification Settings</div>
+    <div class="modal-title zh-only">通知設定</div>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+  </div>
+  <div class="modal-body">
+    <!-- Telegram -->
+    <div class="ch">
+      <div class="ch-hd">
+        <div class="ch-name">✈ Telegram<span class="ch-status" id="tg-status">Not configured</span></div>
+        <div class="toggle-row">
+          <span class="toggle-lbl en-only">Enable</span>
+          <span class="toggle-lbl zh-only">啟用</span>
+          <div class="sw" id="tg-sw" onclick="toggleSw('tg')"></div>
+        </div>
+      </div>
+      <div class="ch-fields">
+        <div class="f-row">
+          <div class="f-lbl">Bot Token</div>
+          <input class="f-inp" id="tg-tok" type="password" placeholder="7xxxxxxxxx:AAF…"/>
+          <div class="f-hint en-only">From <a href="https://t.me/BotFather" target="_blank">@BotFather</a> → /newbot</div>
+          <div class="f-hint zh-only">從 <a href="https://t.me/BotFather" target="_blank">@BotFather</a> → /newbot 取得</div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Chat ID</div>
+          <input class="f-inp" id="tg-cid" placeholder="-100xxxxxxx"/>
+          <div class="f-hint en-only">Send any message to your bot, then check:<br>
+            <code style="font-size:0.58rem;color:var(--cyan)">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>
+          </div>
+          <div class="f-hint zh-only">向你的 Bot 發訊息後查看：<br>
+            <code style="font-size:0.58rem;color:var(--cyan)">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>
+          </div>
+        </div>
+      </div>
+      <div class="ch-ft">
+        <button class="test-btn" id="tg-test" onclick="testNotify('telegram')">
+          <span class="en-only">Send Test</span><span class="zh-only">發送測試</span>
+        </button>
+        <span class="test-res" id="tg-res"></span>
+      </div>
+    </div>
+    <!-- LINE -->
+    <div class="ch">
+      <div class="ch-hd">
+        <div class="ch-name">💬 LINE Notify<span class="ch-status" id="line-status">Not configured</span></div>
+        <div class="toggle-row">
+          <span class="toggle-lbl en-only">Enable</span>
+          <span class="toggle-lbl zh-only">啟用</span>
+          <div class="sw" id="line-sw" onclick="toggleSw('line')"></div>
+        </div>
+      </div>
+      <div class="ch-fields">
+        <div class="f-row">
+          <div class="f-lbl">LINE Notify Token</div>
+          <input class="f-inp" id="line-tok" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"/>
+          <div class="f-hint en-only">Get at <a href="https://notify-bot.line.me/my/" target="_blank">notify-bot.line.me</a> → Generate token</div>
+          <div class="f-hint zh-only">至 <a href="https://notify-bot.line.me/my/" target="_blank">notify-bot.line.me</a> → 發行 token</div>
+        </div>
+      </div>
+      <div class="ch-ft">
+        <button class="test-btn" id="line-test" onclick="testNotify('line')">
+          <span class="en-only">Send Test</span><span class="zh-only">發送測試</span>
+        </button>
+        <span class="test-res" id="line-res"></span>
+      </div>
+    </div>
+    <button class="modal-save" id="modal-save" onclick="saveNotify()">
+      <span class="en-only">Save Settings</span><span class="zh-only">儲存設定</span>
+    </button>
+  </div>
+</div>
+</div>
+
+<!-- LAYOUT -->
 <div id="layout">
 
-  <!-- ===== SIDEBAR ===== -->
-  <div id="sidebar">
-
-    <!-- Search & Add -->
-    <div class="sidebar-section">
-      <div class="section-title">Add Symbol</div>
-      <input id="sym-search" placeholder="e.g. SOLUSDT, BTCUSDT" autocomplete="off" />
-      <button id="add-sym-btn" onclick="addCustomSymbol()">+ Track Symbol</button>
-    </div>
-
-    <!-- Top Gainers -->
-    <div class="sidebar-section">
-      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Top Gainers (24h)</span>
-        <span id="gainers-refresh" style="font-size:0.65rem;color:var(--text2);cursor:pointer;" onclick="refreshGainers()">↻ Refresh</span>
-      </div>
-      <div id="gainers-list"><div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">Loading...</div></div>
-    </div>
-
-    <!-- Tracking List -->
-    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-      <div class="section-title">Tracking</div>
-      <div id="tracked-list"></div>
-    </div>
-
-    <!-- Config -->
-    <div id="config-panel">
-      <div class="section-title">Alert Thresholds</div>
-      <div class="config-row">
-        <span class="config-label">Extreme (Index &gt;)</span>
-        <span class="config-val" id="val-extreme">55</span>
-      </div>
-      <input type="range" id="range-extreme" min="40" max="80" value="55"
-        oninput="document.getElementById('val-extreme').textContent=this.value" />
-
-      <div class="config-row">
-        <span class="config-label">High (Index &gt;)</span>
-        <span class="config-val" id="val-high">40</span>
-      </div>
-      <input type="range" id="range-high" min="20" max="60" value="40"
-        oninput="document.getElementById('val-high').textContent=this.value" />
-
-      <div class="config-row">
-        <span class="config-label">Cooldown (min)</span>
-        <span class="config-val" id="val-cooldown">5</span>
-      </div>
-      <input type="range" id="range-cooldown" min="1" max="30" value="5"
-        oninput="document.getElementById('val-cooldown').textContent=this.value" />
-
-      <button id="apply-config-btn" onclick="applyConfig()">Apply Configuration</button>
+<!-- SIDEBAR -->
+<div id="side">
+  <!-- Search -->
+  <div class="sb">
+    <div class="sb-hd"><span class="en-only">Search Futures</span><span class="zh-only">搜尋合約</span></div>
+    <div class="search-box">
+      <span class="search-icon">⌕</span>
+      <input id="sym-inp" placeholder="BTCUSDT, SOLUSDT…" autocomplete="off"
+        oninput="onSearch(this.value)" onkeydown="onSearchKey(event)"/>
+      <div id="search-results"></div>
     </div>
   </div>
 
-  <!-- ===== MAIN CHART ===== -->
-  <div id="main">
-    <div id="no-symbol-msg">
-      <div class="big">📊</div>
-      <div>Select a symbol from the sidebar to load chart</div>
+  <!-- Top Gainers -->
+  <div class="sb">
+    <div class="sb-hd">
+      <span class="en-only">Top Gainers</span><span class="zh-only">漲幅榜</span>
+      <div class="gainers-ctrl">
+        <button class="sort-pill on" id="sp-desc" onclick="setSort('desc')">▼</button>
+        <button class="sort-pill" id="sp-asc" onclick="setSort('asc')">▲</button>
+        <button class="sort-pill" onclick="refreshGainers()" style="margin-left:2px;">↻</button>
+      </div>
     </div>
-    <div id="tv-container" style="display:none;"></div>
+    <div id="gainers-list"></div>
   </div>
 
-  <!-- ===== BOTTOM PANEL ===== -->
-  <div id="bottom">
-
-    <!-- Index Score -->
-    <div id="index-score-panel">
-      <div id="idx-symbol">—</div>
-      <div id="idx-number" style="color:var(--text2);">—</div>
-      <div id="idx-tag">No Data</div>
-      <div id="gauge-wrap">
-        <div id="gauge-track"><div id="gauge-pin" style="left:0%"></div></div>
-        <div class="gauge-labels">
-          <span>Natural<br>&lt;28</span>
-          <span>High<br>40-55</span>
-          <span style="color:var(--red)">Extreme<br>&gt;55</span>
-        </div>
-      </div>
-      <div style="font-size:0.65rem;color:var(--text2);text-align:center;line-height:1.5;margin-top:4px;">
-        Composite of Hole Collapse,<br>Betti Jump & Max Persistence
-      </div>
+  <!-- Tracking -->
+  <div id="tracked-wrap" class="sb" style="padding:0;flex:1;overflow:hidden;display:flex;flex-direction:column;">
+    <div class="sb-hd" style="padding:12px 14px 8px;">
+      <span class="en-only">Tracking</span><span class="zh-only">追蹤中</span>
     </div>
+    <div id="tracked-list"></div>
+  </div>
 
-    <!-- Three Metric Cards -->
-    <div id="metrics-row">
-
-      <!-- Hole Collapse -->
-      <div class="metric-card">
-        <div class="metric-header">
-          <div class="metric-name" style="color:var(--blue);">Hole Collapse</div>
-          <div class="metric-name-zh">空洞坍塌</div>
-        </div>
-        <div class="metric-desc">
-          Frequency at which short-side resistance walls are forcibly pierced. Higher = resistance vanishes faster.
-        </div>
-        <div class="mini-bars" id="bars-hole">
-          <div class="mini-bar" style="background:var(--bg3);height:35%"></div>
-          <div class="mini-bar" style="background:var(--bg3);height:50%"></div>
-          <div class="mini-bar" style="background:var(--bg3);height:60%"></div>
-          <div class="mini-bar" id="bar-hole-live" style="background:var(--blue);height:70%"></div>
-          <div class="mini-bar" style="background:var(--bg3);height:40%"></div>
-        </div>
-        <div class="metric-footer">
-          <div class="metric-val" id="val-hole" style="color:var(--blue);">—</div>
-          <div class="metric-unit">/ day</div>
-          <div class="metric-ref" id="ref-hole">normal: 2000</div>
-        </div>
-      </div>
-
-      <!-- Betti Jump -->
-      <div class="metric-card">
-        <div class="metric-header">
-          <div class="metric-name" style="color:var(--green);">Betti Jump</div>
-          <div class="metric-name-zh">拓扑重构</div>
-        </div>
-        <div class="metric-desc">
-          Structural topology changes triggered by high-frequency quote stuffing. Measures micro-manipulation frequency.
-        </div>
-        <canvas class="sparkline" id="spark-betti"></canvas>
-        <div class="metric-footer">
-          <div class="metric-val" id="val-betti" style="color:var(--green);">—</div>
-          <div class="metric-unit">/ day</div>
-          <div class="metric-ref">range: 80–150</div>
-        </div>
-      </div>
-
-      <!-- Max Persistence -->
-      <div class="metric-card">
-        <div class="metric-header">
-          <div class="metric-name" style="color:var(--orange);">Max Persistence</div>
-          <div class="metric-name-zh">流动性集中度</div>
-        </div>
-        <div class="metric-desc">
-          Magnetic pull of artificial price anchors. Reflects how long a large order locks price in place (seconds).
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;margin:6px 0;">
-          <div style="position:relative;width:40px;height:40px;">
-            <svg width="40" height="40" viewBox="0 0 40 40">
-              <circle cx="20" cy="20" r="16" fill="none" stroke="var(--bg3)" stroke-width="4"/>
-              <circle id="persist-arc" cx="20" cy="20" r="16" fill="none"
-                stroke="var(--orange)" stroke-width="4"
-                stroke-dasharray="100.5" stroke-dashoffset="100.5"
-                stroke-linecap="round" transform="rotate(-90 20 20)"
-                style="transition:stroke-dashoffset 0.5s"/>
-            </svg>
-          </div>
-          <div style="font-size:0.7rem;color:var(--text2);line-height:1.5;">
-            Persistence<br>duration (s)
-          </div>
-        </div>
-        <div class="metric-footer">
-          <div class="metric-val" id="val-persist" style="color:var(--orange);">—</div>
-          <div class="metric-unit">strength</div>
-          <div class="metric-ref">avg: 160</div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Alert Log -->
-    <div id="alert-panel">
-      <div class="section-title">Alert Log</div>
-      <div id="alert-list">
-        <div class="alert-empty">No alerts yet</div>
-      </div>
-    </div>
-
+  <!-- Config -->
+  <div id="cfg">
+    <div class="cfg-hd"><span class="en-only">Alert Thresholds</span><span class="zh-only">警報閾值</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Extreme &gt;</span><span class="cfg-val" id="cv-ex">55</span></div>
+    <input type="range" id="rng-ex" min="40" max="80" value="55" oninput="document.getElementById('cv-ex').textContent=this.value">
+    <div class="cfg-row"><span class="cfg-lbl">High &gt;</span><span class="cfg-val" id="cv-hi">40</span></div>
+    <input type="range" id="rng-hi" min="20" max="60" value="40" oninput="document.getElementById('cv-hi').textContent=this.value">
+    <div class="cfg-row"><span class="cfg-lbl"><span class="en-only">Cooldown</span><span class="zh-only">冷卻</span> (min)</span><span class="cfg-val" id="cv-cd">5</span></div>
+    <input type="range" id="rng-cd" min="1" max="30" value="5" oninput="document.getElementById('cv-cd').textContent=this.value">
+    <button id="cfg-apply" onclick="applyConfig()">
+      <span class="en-only">Apply</span><span class="zh-only">套用</span>
+    </button>
   </div>
 </div>
+
+<!-- CHART -->
+<div id="chart">
+  <div id="chart-ph">
+    <div class="ph-big">◈</div>
+    <div class="ph-txt en-only">SELECT A FUTURES PAIR</div>
+    <div class="ph-txt zh-only">選擇合約交易對</div>
+  </div>
+  <div id="tv-wrap"></div>
+</div>
+
+<!-- BOTTOM -->
+<div id="bottom">
+
+  <!-- Index block -->
+  <div id="idx-block">
+    <div id="idx-sym">—</div>
+
+    <!-- Warmup ring (shown before warmed up) -->
+    <div id="warmup-ring" style="width:80px;height:80px;">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle class="warmup-track" cx="40" cy="40" r="32" fill="none" stroke="var(--paper4)" stroke-width="4"/>
+        <circle id="warmup-fill" cx="40" cy="40" r="32" fill="none" stroke="var(--blue)" stroke-width="4"
+          stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201"
+          transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 0.4s"/>
+      </svg>
+      <div id="warmup-label" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div id="warmup-cur" style="font-size:1.3rem;font-weight:700;color:var(--ink2);line-height:1;">0</div>
+        <div style="font-size:0.52rem;color:var(--ink3);letter-spacing:0.1em;">/ 20</div>
+      </div>
+    </div>
+
+    <div id="idx-num">—</div>
+    <div id="idx-tag" class="en-only">No Data</div>
+    <div id="idx-tag-zh" class="idx-tag zh-only" style="display:none;">無資料</div>
+
+    <div id="gauge" style="display:none;">
+      <div id="gauge-track">
+        <div id="gauge-fill" style="width:0%;height:1px;background:var(--ink2);"></div>
+        <div id="gauge-pin"></div>
+      </div>
+      <div class="gauge-lbl">
+        <span>NAT</span><span>HIGH</span><span style="color:var(--red)">EXT</span>
+      </div>
+    </div>
+
+    <!-- Per-TF mini dots -->
+    <div id="tf-mini" style="display:none;">
+      <div class="tf-dot"><div class="tf-dot-lbl">5M</div><div class="tf-dot-val" id="td-5m">—</div></div>
+      <div class="tf-dot"><div class="tf-dot-lbl">1H</div><div class="tf-dot-val" id="td-1h">—</div></div>
+      <div class="tf-dot"><div class="tf-dot-lbl">1D</div><div class="tf-dot-val" id="td-1d">—</div></div>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div id="metrics">
+    <!-- Hole Collapse -->
+    <div class="mc">
+      <div class="mc-name en-only" style="color:var(--blue)">Hole Collapse</div>
+      <div class="mc-name zh-only" style="color:var(--blue)">空洞坍塌</div>
+      <div class="mc-zh en-only" style="color:var(--ink3);font-size:0.75rem;font-family:var(--sans);">Short resistance pierced</div>
+      <div class="mc-desc en-only">Frequency of short-side resistance walls being forcibly pierced. Spike = aggressive ask absorption.</div>
+      <div class="mc-desc zh-only">空頭防線被暴力穿越的頻率。數值飆升 = 激進的吃單壓力。</div>
+      <div class="mc-vis">
+        <div class="mbars" id="mbars-h">
+          <div class="mbar" style="background:var(--paper4);height:35%"></div>
+          <div class="mbar" style="background:var(--paper4);height:48%"></div>
+          <div class="mbar" style="background:var(--paper4);height:55%"></div>
+          <div class="mbar" id="mbar-live" style="background:var(--blue);height:65%"></div>
+          <div class="mbar" style="background:var(--paper4);height:40%"></div>
+        </div>
+      </div>
+      <div class="mc-foot">
+        <div class="mc-val" id="v-hole" style="color:var(--blue)">—</div>
+        <div class="mc-unit">/day</div>
+        <div class="mc-ref" id="ref-hole">base: —</div>
+      </div>
+    </div>
+    <!-- Betti Jump -->
+    <div class="mc">
+      <div class="mc-name en-only" style="color:var(--green)">Betti Jump</div>
+      <div class="mc-name zh-only" style="color:var(--green)">拓撲重構</div>
+      <div class="mc-zh en-only" style="color:var(--ink3);font-size:0.75rem;font-family:var(--sans);">Topology restructuring</div>
+      <div class="mc-desc en-only">Order book topology changes from high-frequency quote stuffing. Measures micro-manipulation cadence.</div>
+      <div class="mc-desc zh-only">高頻掛撤單引發的訂單簿拓撲突變，衡量微操控節奏。</div>
+      <div class="mc-vis">
+        <canvas id="spark" style="width:100%;height:30px;display:block;"></canvas>
+      </div>
+      <div class="mc-foot">
+        <div class="mc-val" id="v-betti" style="color:var(--green)">—</div>
+        <div class="mc-unit">/day</div>
+        <div class="mc-ref" id="ref-betti">base: —</div>
+      </div>
+    </div>
+    <!-- Max Persistence -->
+    <div class="mc">
+      <div class="mc-name en-only" style="color:var(--orange)">Max Persistence</div>
+      <div class="mc-name zh-only" style="color:var(--orange)">流動性集中度</div>
+      <div class="mc-zh en-only" style="color:var(--ink3);font-size:0.75rem;font-family:var(--sans);">Large order lock duration</div>
+      <div class="mc-desc en-only">Duration the largest order locks price in place. Longer = stronger artificial price anchor.</div>
+      <div class="mc-desc zh-only">最大單停留時間，越長代表人造價格磁鐵效果越強。</div>
+      <div class="mc-vis" style="display:flex;align-items:center;gap:10px;">
+        <svg width="30" height="30" viewBox="0 0 30 30" style="flex-shrink:0;">
+          <circle cx="15" cy="15" r="12" fill="none" stroke="var(--paper4)" stroke-width="2.5"/>
+          <circle id="parc" cx="15" cy="15" r="12" fill="none" stroke="var(--orange)" stroke-width="2.5"
+            stroke-linecap="round" stroke-dasharray="75.4" stroke-dashoffset="75.4"
+            transform="rotate(-90 15 15)" style="transition:stroke-dashoffset 0.5s"/>
+        </svg>
+        <div style="font-size:0.6rem;color:var(--ink3);line-height:1.6;" class="en-only">vs. symbol<br>baseline</div>
+        <div style="font-size:0.6rem;color:var(--ink3);line-height:1.6;" class="zh-only">相對<br>基準值</div>
+      </div>
+      <div class="mc-foot">
+        <div class="mc-val" id="v-persist" style="color:var(--orange)">—</div>
+        <div class="mc-unit">sec</div>
+        <div class="mc-ref" id="ref-persist">base: —</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div id="alerts">
+    <div class="alerts-hd"><span class="en-only">Alert Log</span><span class="zh-only">警報紀錄</span></div>
+    <div id="alert-list"><div class="al-empty en-only">No alerts</div><div class="al-empty zh-only" style="display:none;">尚無警報</div></div>
+  </div>
+</div>
+</div><!-- end layout -->
 
 <script>
 // ── State ──
 const socket = io();
-let activeSymbol = null;
-let trackedSymbols = [];
-let allSnapshots = {};
-let topGainers = [];
-let bettiHistory = [];
+let activeSym = null, tracked = [], snaps = {}, gainers = [], gainersSort = 'desc';
+let bettiSeries = {}, activeTf = '1h', notifyState = { tg: false, line: false };
 
-// ── Socket Events ──
+// ── Lang ──
+function toggleLang() {
+  const isZh = document.body.classList.toggle('zh');
+  document.getElementById('lang-btn').textContent = isZh ? 'EN' : '中文';
+}
+
+// ── Socket ──
 socket.on('connect', () => {
-  document.getElementById('status-dot').className = 'live';
-  document.getElementById('status-label').textContent = 'Live';
+  document.getElementById('live-dot').className = 'on';
+  document.getElementById('live-lbl').textContent = 'live';
 });
 socket.on('disconnect', () => {
-  document.getElementById('status-dot').className = '';
-  document.getElementById('status-label').textContent = 'Disconnected';
+  document.getElementById('live-dot').className = '';
+  document.getElementById('live-lbl').textContent = 'disconnected';
 });
-
-socket.on('status', (data) => {
-  topGainers = data.topGainers ?? [];
-  trackedSymbols = data.symbols ?? [];
-  renderGainers();
-  renderTracked();
-  for (const snap of (data.snapshots ?? [])) {
-    if (snap.manipulationIndex !== undefined) allSnapshots[snap.symbol] = snap;
-  }
-  if (trackedSymbols.length > 0 && !activeSymbol) selectSymbol(trackedSymbols[0]);
-  else if (activeSymbol) renderMetrics(allSnapshots[activeSymbol]);
+socket.on('status', d => {
+  gainers = d.topGainers ?? [];
+  tracked = d.symbols ?? [];
+  renderGainers(); renderTracked();
+  for (const s of (d.snapshots ?? [])) { if (s?.symbol) snaps[s.symbol] = s; }
+  if (tracked.length && !activeSym) selectSym(tracked[0]);
 });
-
-socket.on('snapshot', (snap) => {
-  allSnapshots[snap.symbol] = snap;
-  updateTrackedRow(snap);
-  if (snap.symbol === activeSymbol) renderMetrics(snap);
+socket.on('snapshot', s => {
+  snaps[s.symbol] = s;
+  updateTrackedRow(s);
+  if (s.symbol === activeSym) renderBottom(s);
 });
-
 socket.on('alert', addAlert);
-
-socket.on('symbolsUpdated', (symbols) => {
-  trackedSymbols = symbols;
-  renderTracked();
-  if (!symbols.includes(activeSymbol) && symbols.length > 0) selectSymbol(symbols[0]);
+socket.on('symbolsUpdated', syms => {
+  tracked = syms; renderTracked();
+  if (!syms.includes(activeSym) && syms.length) selectSym(syms[0]);
 });
 
-socket.on('configUpdated', (cfg) => {
-  console.log('[Config] Updated:', cfg);
+// ── Search ──
+let searchTimer;
+function onSearch(q) {
+  clearTimeout(searchTimer);
+  const el = document.getElementById('search-results');
+  if (!q.trim()) { el.style.display = 'none'; return; }
+  searchTimer = setTimeout(() => {
+    fetch('/api/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(results => {
+        if (!results.length) { el.style.display = 'none'; return; }
+        el.innerHTML = results.map(sym => {
+          const isT = tracked.includes(sym);
+          return `<div class="sr-item ${isT?'tracked':''}" onclick="addAndSelect('${sym}')">
+            <span>${sym.replace('USDT','')}<span style="color:var(--ink3);font-size:0.62rem;">/USDT</span></span>
+            <span class="sr-tag">${isT ? '✓ tracking' : 'PERP'}</span>
+          </div>`;
+        }).join('');
+        el.style.display = 'block';
+      });
+  }, 200);
+}
+function onSearchKey(e) {
+  if (e.key === 'Escape') closeSearch();
+  if (e.key === 'Enter') {
+    const q = e.target.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (q) addAndSelect(q.endsWith('USDT') ? q : q + 'USDT');
+  }
+}
+function closeSearch() {
+  document.getElementById('search-results').style.display = 'none';
+  document.getElementById('sym-inp').value = '';
+}
+function addAndSelect(sym) {
+  closeSearch();
+  if (!tracked.includes(sym)) {
+    const next = [...new Set([...tracked, sym])];
+    socket.emit('setSymbols', next);
+  }
+  setTimeout(() => selectSym(sym), 100);
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-box')) closeSearch();
 });
 
-// ── Symbol Actions ──
-function addCustomSymbol() {
-  const raw = document.getElementById('sym-search').value.trim();
-  if (!raw) return;
-  const syms = raw.split(/[,\s]+/).map(s => s.toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean);
-  const combined = [...new Set([...trackedSymbols, ...syms])];
-  socket.emit('setSymbols', combined);
-  document.getElementById('sym-search').value = '';
+// ── Gainers ──
+function setSort(d) {
+  gainersSort = d;
+  document.getElementById('sp-desc').classList.toggle('on', d==='desc');
+  document.getElementById('sp-asc').classList.toggle('on', d==='asc');
+  renderGainers();
 }
-
-function removeSymbol(sym) {
-  const remaining = trackedSymbols.filter(s => s !== sym);
-  socket.emit('setSymbols', remaining);
-  if (activeSymbol === sym) {
-    activeSymbol = null;
-    document.getElementById('active-symbol-badge').textContent = '—';
-    document.getElementById('tv-container').style.display = 'none';
-    document.getElementById('no-symbol-msg').style.display = 'flex';
-    clearMetrics();
-  }
-}
-
-function toggleGainer(sym) {
-  if (trackedSymbols.includes(sym)) {
-    removeSymbol(sym);
-  } else {
-    const combined = [...new Set([...trackedSymbols, sym])];
-    socket.emit('setSymbols', combined);
-  }
-}
-
 function refreshGainers() {
-  fetch('/api/gainers').then(r => r.json()).then(data => {
-    topGainers = data;
-    renderGainers();
-  });
+  fetch('/api/gainers').then(r=>r.json()).then(d=>{ gainers=d; renderGainers(); });
 }
-
-function selectSymbol(sym) {
-  activeSymbol = sym;
-  document.getElementById('active-symbol-badge').textContent = sym;
-  loadTradingViewChart(sym);
-  renderTrackedActive();
-  if (allSnapshots[sym]) renderMetrics(allSnapshots[sym]);
-}
-
-// ── TradingView ──
-function loadTradingViewChart(symbol) {
-  const container = document.getElementById('tv-container');
-  const noMsg = document.getElementById('no-symbol-msg');
-  noMsg.style.display = 'none';
-  container.style.display = 'block';
-
-  // TradingView widget symbol format: BINANCE:BTCUSDT
-  const tvSym = 'BINANCE:' + symbol;
-
-  container.innerHTML = `
-    <div class="tradingview-widget-container" style="height:100%;width:100%">
-      <div id="tv-widget" style="height:100%;width:100%"></div>
-      <script type="text/javascript">
-        new TradingView.widget({
-          autosize: true,
-          symbol: "${tvSym}",
-          interval: "15",
-          timezone: "Asia/Taipei",
-          theme: "dark",
-          style: "1",
-          locale: "en",
-          toolbar_bg: "#141417",
-          enable_publishing: false,
-          hide_top_toolbar: false,
-          hide_legend: false,
-          save_image: false,
-          container_id: "tv-widget",
-          backgroundColor: "#0d0d0f",
-          gridColor: "rgba(42,42,53,0.5)",
-          studies: [],
-          show_popup_button: false,
-          popup_width: "1000",
-          popup_height: "650"
-        });
-      <\/script>
-    </div>
-    <script src="https://s3.tradingview.com/tv.js"><\/script>
-  `;
-}
-
-// ── Render Functions ──
 function renderGainers() {
   const el = document.getElementById('gainers-list');
-  if (!topGainers.length) { el.innerHTML = '<div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">No data</div>'; return; }
-  el.innerHTML = topGainers.map(g => {
-    const isTracked = trackedSymbols.includes(g.symbol);
-    const shortSym = g.symbol.replace('USDT', '');
-    return `
-      <div class="gainer-row ${isTracked ? 'tracked' : ''}" onclick="toggleGainer('${g.symbol}')">
-        <div>
-          <div class="gainer-sym">${shortSym}<span style="font-size:0.65rem;color:var(--text2);font-weight:400;">/USDT</span></div>
-          <div class="gainer-price">$${parseFloat(g.price) < 0.01 ? g.price.toFixed(6) : g.price.toFixed(4)}</div>
-        </div>
-        <div style="text-align:right;">
-          <div class="gainer-pct">+${g.changePercent}%</div>
-          <button class="gainer-track-btn">${isTracked ? '✓ Tracking' : '+ Track'}</button>
-        </div>
-      </div>`;
+  if (!gainers.length) { el.innerHTML = '<div style="padding:8px 14px;font-size:0.65rem;color:var(--ink3);">Loading…</div>'; return; }
+  const sorted = [...gainers].sort((a,b) => gainersSort==='desc'
+    ? parseFloat(b.changePercent)-parseFloat(a.changePercent)
+    : parseFloat(a.changePercent)-parseFloat(b.changePercent));
+  el.innerHTML = sorted.map(g => {
+    const isT = tracked.includes(g.symbol);
+    const pct = parseFloat(g.changePercent);
+    const p = parseFloat(g.price);
+    const ps = p < 0.001 ? p.toExponential(2) : p < 1 ? p.toFixed(4) : p.toFixed(2);
+    return `<div class="gi ${isT?'trk':''}" onclick="toggleGainer('${g.symbol}')">
+      <div><div class="gi-sym">${g.symbol.replace('USDT','')}<span class="gi-sub">/USDT</span></div>
+        <div class="gi-sub">$${ps}</div></div>
+      <div class="gi-pct ${pct>=0?'up':'dn'}">${pct>=0?'+':''}${pct.toFixed(2)}%</div>
+      <div class="gi-dot"></div>
+    </div>`;
   }).join('');
 }
+function toggleGainer(sym) {
+  if (tracked.includes(sym)) removeSym(sym);
+  else addAndSelect(sym);
+}
 
+// ── Tracked ──
 function renderTracked() {
   const el = document.getElementById('tracked-list');
-  if (!trackedSymbols.length) {
-    el.innerHTML = '<div style="color:var(--text2);font-size:0.75rem;padding:4px 0;">No symbols tracked</div>';
-    return;
+  if (!tracked.length) { el.innerHTML = '<div style="padding:10px 14px;font-size:0.65rem;color:var(--ink3);">—</div>'; return; }
+  el.innerHTML = tracked.map(sym => buildTI(sym, snaps[sym])).join('');
+}
+function buildTI(sym, s) {
+  const isActive = sym === activeSym;
+  let right = '';
+  if (!s || s.manipulationIndex === undefined) {
+    right = `<div class="ti-wu">wait…</div>`;
+  } else if (!s.warmedUp) {
+    const { current, total } = s.warmup ?? {};
+    right = `<div class="ti-wu">${current}/${total}</div>`;
+  } else {
+    const idx = s.manipulationIndex ?? '—';
+    const lvl = s.manipulationLevel ?? '';
+    right = `<div class="ti-idx" style="color:${lc(lvl)}">${idx}</div>
+             <div class="ti-lvl">${lvl}</div>`;
   }
-  el.innerHTML = trackedSymbols.map(sym => {
-    const snap = allSnapshots[sym];
-    const idx = snap?.manipulationIndex ?? '—';
-    const level = snap?.manipulationLevel ?? '';
-    const cls = levelClass(level);
-    return `
-      <div class="tracked-row ${sym === activeSymbol ? 'active' : ''}" id="trow-${sym}" onclick="selectSymbol('${sym}')">
-        <div class="tracked-sym">${sym.replace('USDT','')}<span style="font-size:0.65rem;color:var(--text2);font-weight:400;">/USDT</span></div>
-        <div>
-          <div class="tracked-index idx-${cls}">${idx}</div>
-          <div class="tracked-level" style="color:var(--text2);">${level}</div>
-        </div>
-        <button class="remove-btn" onclick="event.stopPropagation();removeSymbol('${sym}')">✕</button>
-      </div>`;
-  }).join('');
+  return `<div class="ti ${isActive?'active':''}" id="ti-${sym}" onclick="selectSym('${sym}')">
+    <div class="ti-sym">${sym.replace('USDT','')}<small>/USDT</small></div>
+    <div class="ti-right">${right}</div>
+    <button class="ti-del" onclick="event.stopPropagation();removeSym('${sym}')">✕</button>
+  </div>`;
+}
+function updateTrackedRow(s) {
+  const el = document.getElementById('ti-'+s.symbol);
+  if (!el) return;
+  const html = buildTI(s.symbol, s);
+  el.outerHTML = html;
+}
+function removeSym(sym) {
+  socket.emit('setSymbols', tracked.filter(s => s !== sym));
+  if (activeSym === sym) { activeSym = null; clearBottom(); hideChart(); }
+}
+function selectSym(sym) {
+  activeSym = sym;
+  document.querySelectorAll('.ti').forEach(e => e.classList.toggle('active', e.id==='ti-'+sym));
+  loadChart(sym);
+  renderBottom(snaps[sym]);
 }
 
-function renderTrackedActive() {
-  document.querySelectorAll('.tracked-row').forEach(el => {
-    const sym = el.id.replace('trow-', '');
-    el.classList.toggle('active', sym === activeSymbol);
+// ── Chart ──
+function loadChart(sym) {
+  const wrap = document.getElementById('tv-wrap');
+  const ph = document.getElementById('chart-ph');
+  wrap.innerHTML = '';
+  ph.style.display = 'none';
+  wrap.style.display = 'block';
+  const cont = document.createElement('div');
+  cont.id = 'tv-c'; cont.style.cssText = 'height:100%;width:100%;';
+  wrap.appendChild(cont);
+  const sc = document.createElement('script');
+  sc.src = 'https://s3.tradingview.com/tv.js';
+  sc.onload = () => new TradingView.widget({
+    autosize: true,
+    symbol: 'BINANCE:' + sym + '.P',
+    interval: '60',
+    timezone: 'Asia/Taipei', theme: 'light', style: '1', locale: 'en',
+    toolbar_bg: '#ffffff', enable_publishing: false,
+    container_id: 'tv-c',
+    backgroundColor: 'rgba(255,255,255,1)',
+    gridColor: 'rgba(220,220,220,0.5)',
   });
+  wrap.appendChild(sc);
+}
+function hideChart() {
+  document.getElementById('tv-wrap').style.display = 'none';
+  document.getElementById('tv-wrap').innerHTML = '';
+  document.getElementById('chart-ph').style.display = 'flex';
 }
 
-function updateTrackedRow(snap) {
-  const row = document.getElementById('trow-' + snap.symbol);
-  if (!row) return;
-  const idx = snap.manipulationIndex ?? '—';
-  const level = snap.manipulationLevel ?? '';
-  const cls = levelClass(level);
-  const idxEl = row.querySelector('.tracked-index');
-  const lvlEl = row.querySelector('.tracked-level');
-  if (idxEl) { idxEl.textContent = idx; idxEl.className = `tracked-index idx-${cls}`; }
-  if (lvlEl) lvlEl.textContent = level;
-}
+// ── Bottom ──
+const CIRC = 2*Math.PI*12; // r=12 for parc
+function renderBottom(s) {
+  if (!s) return;
+  const m = s.metrics;
+  const wu = s.warmup ?? { current:0, total:20 };
+  document.getElementById('idx-sym').textContent = s.symbol;
 
-function levelClass(level) {
-  if (!level) return 'natural';
-  return level.toLowerCase();
-}
+  if (!s.warmedUp) {
+    // Show warmup ring
+    document.getElementById('warmup-ring').style.display = 'flex';
+    document.getElementById('idx-num').style.display = 'none';
+    document.getElementById('gauge').style.display = 'none';
+    document.getElementById('tf-mini').style.display = 'none';
+    document.getElementById('idx-tag').textContent = document.body.classList.contains('zh')
+      ? `採集中 ${wu.current}/${wu.total}` : `Collecting ${wu.current}/${wu.total}`;
+    document.getElementById('warmup-cur').textContent = wu.current;
+    const offset = 201 * (1 - wu.current / wu.total);
+    document.getElementById('warmup-fill').setAttribute('stroke-dashoffset', offset.toFixed(1));
+  } else {
+    document.getElementById('warmup-ring').style.display = 'none';
+    document.getElementById('idx-num').style.display = 'block';
+    document.getElementById('gauge').style.display = 'block';
+    document.getElementById('tf-mini').style.display = 'flex';
 
-function levelColor(level) {
-  switch ((level || '').toLowerCase()) {
-    case 'extreme': return 'var(--red)';
-    case 'high': return 'var(--orange)';
-    case 'moderate': return 'var(--orange)';
-    default: return 'var(--green)';
+    const idx = s.manipulationIndex ?? 0;
+    const lvl = s.manipulationLevel ?? 'Natural';
+    const color = lc(lvl);
+    document.getElementById('idx-num').textContent = idx;
+    document.getElementById('idx-num').style.color = color;
+    document.getElementById('idx-tag').textContent = ll(lvl);
+    document.getElementById('idx-tag').className = 'idx-tag en-only ' + lvl.toLowerCase();
+
+    const pct = Math.min(96, (idx/80)*100);
+    document.getElementById('gauge-pin').style.left = pct + '%';
+    document.getElementById('gauge-fill').style.width = pct + '%';
+    document.getElementById('gauge-fill').style.background = color;
+
+    // All-TF mini
+    const all = s.allTf ?? {};
+    const tfColor = v => v === null ? 'var(--ink3)' : v > 55 ? 'var(--red)' : v > 40 ? 'var(--orange)' : v > 28 ? 'var(--blue)' : 'var(--green)';
+    ['5m','1h','1d'].forEach(tf => {
+      const v = all[tf];
+      const el = document.getElementById('td-'+tf);
+      el.textContent = v === null ? '…' : v;
+      el.style.color = tfColor(v);
+    });
   }
+
+  // Metrics
+  const hv = m.holeCollapse.value, hb = m.holeCollapse.baseline;
+  const bv = m.bettiJump.value,    bb = m.bettiJump.baseline;
+  const pv = m.maxPersistence.value, pb = m.maxPersistence.baseline;
+
+  document.getElementById('v-hole').textContent = hv.toLocaleString();
+  document.getElementById('ref-hole').textContent = hb != null ? `base: ${Math.round(hb)}` : 'learning…';
+  const hRatio = hb ? Math.min(1, hv/(hb*3)) : 0.3;
+  document.getElementById('mbar-live').style.height = Math.max(4, hRatio*100) + '%';
+
+  document.getElementById('v-betti').textContent = bv.toLocaleString();
+  document.getElementById('ref-betti').textContent = bb != null ? `base: ${Math.round(bb)}` : 'learning…';
+  if (!bettiSeries[s.symbol]) bettiSeries[s.symbol] = [];
+  bettiSeries[s.symbol].push(bv);
+  if (bettiSeries[s.symbol].length > 50) bettiSeries[s.symbol].shift();
+  drawSpark(bettiSeries[s.symbol], '#34c97a');
+
+  document.getElementById('v-persist').textContent = pv.toLocaleString();
+  document.getElementById('ref-persist').textContent = pb != null ? `base: ${Math.round(pb)}s` : 'learning…';
+  const pRatio = pb ? Math.min(1, pv/(pb*3)) : 0;
+  const circ = 75.4; // 2π×12
+  document.getElementById('parc').setAttribute('stroke-dashoffset', (circ*(1-pRatio)).toFixed(1));
 }
 
-// ── Metrics Rendering ──
-function renderMetrics(snap) {
-  if (!snap) return;
-  const m = snap.metrics;
-  const idx = snap.manipulationIndex;
-  const level = snap.manipulationLevel;
-  const color = levelColor(level);
-  const cls = levelClass(level);
-
-  // Score panel
-  document.getElementById('idx-symbol').textContent = snap.symbol;
-  document.getElementById('idx-number').textContent = idx;
-  document.getElementById('idx-number').style.color = color;
-
-  const tag = document.getElementById('idx-tag');
-  tag.textContent = levelLabel(level);
-  tag.className = `idx-tag ${cls}`;
-
-  // Gauge
-  const pct = Math.min(95, (idx / 80) * 100);
-  document.getElementById('gauge-pin').style.left = pct + '%';
-
-  // Hole Collapse
-  const holeVal = m.holeCollapse.value;
-  document.getElementById('val-hole').textContent = holeVal.toLocaleString();
-  const holeRatio = Math.min(1, holeVal / 4000);
-  document.getElementById('bar-hole-live').style.height = Math.max(4, holeRatio * 100) + '%';
-
-  // Betti Jump
-  const bettiVal = m.bettiJump.value;
-  document.getElementById('val-betti').textContent = bettiVal.toLocaleString();
-  bettiHistory.push(bettiVal);
-  if (bettiHistory.length > 30) bettiHistory.shift();
-  drawSparkline('spark-betti', bettiHistory, '#22c55e');
-
-  // Max Persistence
-  const persistVal = m.maxPersistence.value;
-  document.getElementById('val-persist').textContent = persistVal.toLocaleString();
-  const persistRatio = Math.min(1, persistVal / 300);
-  const circ = 2 * Math.PI * 16; // r=16
-  const offset = circ * (1 - persistRatio);
-  document.getElementById('persist-arc').setAttribute('stroke-dasharray', circ.toFixed(1));
-  document.getElementById('persist-arc').setAttribute('stroke-dashoffset', offset.toFixed(1));
-}
-
-function clearMetrics() {
-  ['val-hole','val-betti','val-persist','idx-number'].forEach(id => {
-    document.getElementById(id).textContent = '—';
-  });
-  document.getElementById('idx-symbol').textContent = '—';
+function clearBottom() {
+  ['v-hole','v-betti','v-persist'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('idx-num').textContent = '—';
+  document.getElementById('idx-num').style.color = 'var(--ink3)';
+  document.getElementById('idx-sym').textContent = '—';
   document.getElementById('idx-tag').textContent = 'No Data';
-  document.getElementById('idx-tag').className = 'idx-tag';
-  document.getElementById('idx-number').style.color = 'var(--text2)';
-}
-
-function levelLabel(level) {
-  switch ((level || '').toLowerCase()) {
-    case 'extreme': return 'Extreme Manipulation';
-    case 'high': return 'High Manipulation';
-    case 'moderate': return 'Moderate';
-    default: return 'Natural State';
-  }
+  document.getElementById('idx-tag').className = 'idx-tag en-only';
 }
 
 // ── Sparkline ──
-function drawSparkline(canvasId, data, color) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
+function drawSpark(data, stroke) {
+  const c = document.getElementById('spark');
+  if (!c || data.length < 2) return;
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.offsetWidth;
-  const h = canvas.offsetHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
-  if (data.length < 2) return;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const step = w / (data.length - 1);
-
-  ctx.clearRect(0, 0, w, h);
-
-  // Fill
+  const w = c.offsetWidth || 160, h = c.offsetHeight || 30;
+  c.width = w*dpr; c.height = h*dpr;
+  const ctx = c.getContext('2d'); ctx.scale(dpr,dpr);
+  const max = Math.max(...data,1), min = Math.min(...data,0), rng = max-min||1;
+  const sx = w/(data.length-1);
+  const fy = v => h - ((v-min)/rng)*(h-4) - 2;
+  ctx.clearRect(0,0,w,h);
   ctx.beginPath();
-  ctx.moveTo(0, h);
-  data.forEach((v, i) => {
-    const x = i * step;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.lineTo((data.length - 1) * step, h);
-  ctx.closePath();
-  ctx.fillStyle = color + '22';
-  ctx.fill();
-
-  // Line
+  data.forEach((v,i) => i===0 ? ctx.moveTo(0,fy(v)) : ctx.lineTo(i*sx,fy(v)));
+  ctx.lineTo((data.length-1)*sx,h); ctx.lineTo(0,h); ctx.closePath();
+  ctx.fillStyle = stroke+'18'; ctx.fill();
   ctx.beginPath();
-  data.forEach((v, i) => {
-    const x = i * step;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  data.forEach((v,i) => i===0 ? ctx.moveTo(0,fy(v)) : ctx.lineTo(i*sx,fy(v)));
+  ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
 }
 
-// ── Alert Log ──
-function addAlert(alert) {
+// ── Alerts ──
+function addAlert(a) {
   const list = document.getElementById('alert-list');
-  const empty = list.querySelector('.alert-empty');
-  if (empty) empty.remove();
-
-  const time = new Date(alert.timestamp).toLocaleTimeString('en', { hour12: false });
-  const cls = (alert.level || '').toLowerCase();
+  list.querySelector('.al-empty')?.remove();
+  const cls = (a.level||'').toLowerCase();
+  const t = new Date(a.timestamp).toLocaleTimeString('en',{hour12:false});
   const div = document.createElement('div');
-  div.className = `alert-item ${cls}`;
-  div.innerHTML = `
-    <div class="alert-sym">${alert.symbol} — ${alert.level}</div>
-    <div style="color:var(--text1);margin:2px 0;">Index: <strong>${alert.index}</strong></div>
-    <div class="alert-time">${time}</div>`;
+  div.className = 'al';
+  div.innerHTML = `<div class="al-sym ${cls}">${a.symbol} — ${a.level}</div>
+    <div class="al-body">Index <b>${a.index}</b></div>
+    <div class="al-time">${t}</div>`;
   list.prepend(div);
-
-  // Keep max 50
   while (list.children.length > 50) list.lastChild.remove();
 }
 
 // ── Config ──
 function applyConfig() {
-  const cfg = {
-    extremeThreshold: parseInt(document.getElementById('range-extreme').value),
-    highThreshold: parseInt(document.getElementById('range-high').value),
-    cooldownMs: parseInt(document.getElementById('range-cooldown').value) * 60_000,
-  };
-  socket.emit('updateConfig', cfg);
-  const btn = document.getElementById('apply-config-btn');
-  btn.textContent = '✓ Applied';
-  setTimeout(() => btn.textContent = 'Apply Configuration', 2000);
+  socket.emit('updateConfig', {
+    extremeThreshold: +document.getElementById('rng-ex').value,
+    highThreshold: +document.getElementById('rng-hi').value,
+    cooldownMs: +document.getElementById('rng-cd').value * 60000,
+  });
+  const btn = document.getElementById('cfg-apply');
+  btn.classList.add('ok'); btn.querySelector('.en-only').textContent = '✓ Applied';
+  setTimeout(() => { btn.classList.remove('ok'); btn.querySelector('.en-only').textContent = 'Apply'; }, 2000);
 }
 
-// ── Keyboard ──
-document.getElementById('sym-search').addEventListener('keydown', e => {
-  if (e.key === 'Enter') addCustomSymbol();
-});
+// ── Notify Modal ──
+function openModal() {
+  fetch('/api/notify').then(r=>r.json()).then(d => {
+    if (d.telegram.token) document.getElementById('tg-tok').placeholder = d.telegram.token;
+    document.getElementById('tg-cid').value = d.telegram.chatId || '';
+    setSw('tg', d.telegram.enabled);
+    setStatus('tg-status', d.telegram.configured, d.telegram.enabled);
+    if (d.line.token) document.getElementById('line-tok').placeholder = d.line.token;
+    setSw('line', d.line.enabled);
+    setStatus('line-status', d.line.configured, d.line.enabled);
+    updateNotifyDot(d.telegram.enabled || d.line.enabled);
+  });
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+function toggleSw(ch) { setSw(ch, !notifyState[ch]); }
+function setSw(ch, on) {
+  notifyState[ch] = on;
+  document.getElementById(ch+'-sw').className = 'sw' + (on?' on':'');
+}
+function setStatus(id, configured, enabled) {
+  const el = document.getElementById(id);
+  el.textContent = enabled && configured ? '● Active' : configured ? 'Configured' : 'Not configured';
+  el.className = 'ch-status' + (enabled && configured ? ' ok' : '');
+}
+function updateNotifyDot(on) {
+  const d = document.getElementById('notify-active-dot');
+  d.className = on ? 'on' : '';
+}
+async function testNotify(ch) {
+  const btnId = ch==='telegram' ? 'tg-test' : 'line-test';
+  const resId = ch==='telegram' ? 'tg-res' : 'line-res';
+  const btn = document.getElementById(btnId);
+  const res = document.getElementById(resId);
+  btn.disabled = true; btn.textContent = '…';
+  res.textContent = ''; res.className = 'test-res';
+  // Save current inputs first
+  await saveNotifyData();
+  try {
+    const r = await fetch('/api/notify/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ channel: ch }),
+    }).then(x=>x.json());
+    res.textContent = r.ok ? '✓ Sent!' : '✕ ' + (r.error||r.detail||'Failed');
+    res.className = 'test-res ' + (r.ok ? 'ok' : 'err');
+  } catch(e) {
+    res.textContent = '✕ Network error'; res.className = 'test-res err';
+  }
+  btn.disabled = false;
+  const isZh = document.body.classList.contains('zh');
+  btn.textContent = isZh ? '發送測試' : 'Send Test';
+}
+async function saveNotifyData() {
+  const tgTok = document.getElementById('tg-tok').value.trim();
+  const tgCid = document.getElementById('tg-cid').value.trim();
+  const lineTok = document.getElementById('line-tok').value.trim();
+  await fetch('/api/notify', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      telegram: { token: tgTok||undefined, chatId: tgCid, enabled: notifyState.tg },
+      line: { token: lineTok||undefined, enabled: notifyState.line },
+    }),
+  });
+}
+async function saveNotify() {
+  await saveNotifyData();
+  const btn = document.getElementById('modal-save');
+  btn.classList.add('ok');
+  btn.querySelector('.en-only').textContent = '✓ Saved!';
+  btn.querySelector('.zh-only').textContent = '✓ 已儲存';
+  updateNotifyDot(notifyState.tg || notifyState.line);
+  setTimeout(() => {
+    btn.classList.remove('ok');
+    btn.querySelector('.en-only').textContent = 'Save Settings';
+    btn.querySelector('.zh-only').textContent = '儲存設定';
+  }, 2000);
+}
+
+// ── Helpers ──
+function lc(lvl) {
+  switch((lvl||'').toLowerCase()) {
+    case 'extreme': return 'var(--red)';
+    case 'high': case 'moderate': return 'var(--orange)';
+    case 'natural': return 'var(--green)';
+    default: return 'var(--ink3)';
+  }
+}
+function ll(lvl) {
+  if (document.body.classList.contains('zh')) {
+    switch((lvl||'').toLowerCase()) {
+      case 'extreme': return '極高操控'; case 'high': return '高操控';
+      case 'moderate': return '中度操控'; default: return '自然狀態';
+    }
+  }
+  switch((lvl||'').toLowerCase()) {
+    case 'extreme': return 'EXTREME'; case 'high': return 'HIGH';
+    case 'moderate': return 'MODERATE'; default: return 'NATURAL';
+  }
+}
 </script>
 </body>
 </html>

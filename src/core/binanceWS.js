@@ -1,34 +1,34 @@
-/**
- * Binance WebSocket Manager
- * Handles connections, subscriptions, and reconnection logic
- */
-
 const WebSocket = require('ws');
 const https = require('https');
 
-const WS_BASE = 'wss://stream.binance.com:9443/ws';
-const REST_BASE = 'https://api.binance.com';
+const SPOT_REST = 'https://api.binance.com';
+const FUTURES_REST = 'https://fapi.binance.com';
+const FUTURES_WS = 'wss://fstream.binance.com/stream';
 
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(e); }
-      });
+    https.get(url, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(e); } });
     }).on('error', reject);
   });
 }
 
-/**
- * Fetch top N gainers from Binance (USDT pairs, sorted by 24h % change)
- */
+// Fetch all active USDT-margined perpetual futures symbols
+async function fetchFuturesSymbols() {
+  const info = await httpsGet(`${FUTURES_REST}/fapi/v1/exchangeInfo`);
+  return info.symbols
+    .filter(s => s.contractType === 'PERPETUAL' && s.status === 'TRADING' && s.quoteAsset === 'USDT')
+    .map(s => s.symbol)
+    .sort();
+}
+
+// Fetch top N gainers from futures 24h ticker
 async function fetchTopGainers(n = 20) {
-  const tickers = await httpsGet(`${REST_BASE}/api/v3/ticker/24hr`);
+  const tickers = await httpsGet(`${FUTURES_REST}/fapi/v1/ticker/24hr`);
   return tickers
-    .filter(t => t.symbol.endsWith('USDT') && parseFloat(t.volume) > 100000)
+    .filter(t => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 1_000_000)
     .sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent))
     .slice(0, n)
     .map(t => ({
@@ -39,125 +39,63 @@ async function fetchTopGainers(n = 20) {
     }));
 }
 
-/**
- * Fetch order book snapshot for a symbol
- */
+// Fetch futures order book snapshot
 async function fetchOrderBookSnapshot(symbol, limit = 100) {
-  return httpsGet(`${REST_BASE}/api/v3/depth?symbol=${symbol}&limit=${limit}`);
+  return httpsGet(`${FUTURES_REST}/fapi/v1/depth?symbol=${symbol}&limit=${limit}`);
 }
 
-/**
- * Create a WebSocket connection subscribing to depth streams for given symbols
- * @param {string[]} symbols - e.g. ['BTCUSDT', 'ETHUSDT']
- * @param {Function} onUpdate - callback(symbol, updateEvent)
- * @param {Function} onError - callback(err)
- * @returns {{ close: Function }}
- */
-function subscribeDepth(symbols, onUpdate, onError) {
+// Subscribe to futures depth streams via combined stream
+function subscribeDepth(symbols, onUpdate) {
   const streams = symbols.map(s => `${s.toLowerCase()}@depth@100ms`).join('/');
-  const url = `${WS_BASE}/${streams}`;
-
-  let ws;
-  let pingInterval;
-  let reconnectTimer;
-  let closed = false;
+  const url = `${FUTURES_WS}?streams=${streams}`;
+  let closed = false, pingTimer, ws;
 
   function connect() {
     ws = new WebSocket(url);
-
     ws.on('open', () => {
-      console.log(`[WS] Connected: ${symbols.join(', ')}`);
-      pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.ping();
-      }, 15000);
+      console.log(`[FuturesWS] Connected: ${symbols.length} symbols`);
+      pingTimer = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); }, 20000);
     });
-
-    ws.on('message', (raw) => {
+    ws.on('message', raw => {
       try {
-        const data = JSON.parse(raw);
-        // Combined stream wraps in { stream, data }
-        const event = data.data ?? data;
-        const symbol = event.s;
-        if (symbol) onUpdate(symbol, event);
-      } catch (e) {
-        // ignore parse errors
-      }
+        const msg = JSON.parse(raw);
+        const evt = msg.data ?? msg;
+        if (evt.e === 'depthUpdate' && evt.s) onUpdate(evt.s, evt);
+      } catch (_) {}
     });
-
-    ws.on('pong', () => {}); // keep-alive acknowledged
-
     ws.on('close', () => {
-      clearInterval(pingInterval);
-      if (!closed) {
-        console.log('[WS] Disconnected, reconnecting in 3s...');
-        reconnectTimer = setTimeout(connect, 3000);
-      }
+      clearInterval(pingTimer);
+      if (!closed) setTimeout(connect, 3000);
     });
-
-    ws.on('error', (err) => {
-      console.error('[WS] Error:', err.message);
-      if (onError) onError(err);
-      ws.terminate();
-    });
+    ws.on('error', err => { console.error('[FuturesWS]', err.message); ws.terminate(); });
   }
 
   connect();
-
-  return {
-    close() {
-      closed = true;
-      clearInterval(pingInterval);
-      clearTimeout(reconnectTimer);
-      ws?.terminate();
-    },
-  };
+  return { close() { closed = true; clearInterval(pingTimer); ws?.terminate(); } };
 }
 
-/**
- * Subscribe to mini ticker for all symbols (price + volume updates)
- * @param {string[]} symbols
- * @param {Function} onTick - callback(symbol, tickerData)
- */
+// Subscribe to futures mini ticker
 function subscribeTicker(symbols, onTick) {
   const streams = symbols.map(s => `${s.toLowerCase()}@miniTicker`).join('/');
-  const url = `${WS_BASE}/${streams}`;
-
+  const url = `${FUTURES_WS}?streams=${streams}`;
   let closed = false;
 
   function connect() {
     const ws = new WebSocket(url);
-
-    ws.on('message', (raw) => {
+    ws.on('message', raw => {
       try {
-        const data = JSON.parse(raw);
-        const event = data.data ?? data;
-        if (event.e === '24hrMiniTicker') {
-          onTick(event.s, {
-            price: parseFloat(event.c),
-            open: parseFloat(event.o),
-            high: parseFloat(event.h),
-            low: parseFloat(event.l),
-            volume: parseFloat(event.v),
-            quoteVolume: parseFloat(event.q),
-          });
+        const msg = JSON.parse(raw);
+        const e = msg.data ?? msg;
+        if (e.e === '24hrMiniTicker') {
+          onTick(e.s, { price: parseFloat(e.c), open: parseFloat(e.o), high: parseFloat(e.h), low: parseFloat(e.l), volume: parseFloat(e.v), quoteVolume: parseFloat(e.q) });
         }
       } catch (_) {}
     });
-
-    ws.on('close', () => {
-      if (!closed) setTimeout(connect, 3000);
-    });
-
-    ws.on('error', (err) => {
-      console.error('[Ticker WS]', err.message);
-      ws.terminate();
-    });
-
-    return ws;
+    ws.on('close', () => { if (!closed) setTimeout(connect, 3000); });
+    ws.on('error', err => { console.error('[TickerWS]', err.message); ws.terminate(); });
   }
-
-  const ws = connect();
-  return { close: () => { closed = true; ws?.terminate(); } };
+  connect();
+  return { close() { closed = true; } };
 }
 
-module.exports = { fetchTopGainers, fetchOrderBookSnapshot, subscribeDepth, subscribeTicker };
+module.exports = { fetchFuturesSymbols, fetchTopGainers, fetchOrderBookSnapshot, subscribeDepth, subscribeTicker };

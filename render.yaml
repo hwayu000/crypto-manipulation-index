@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: crypto-manipulation-index
+    runtime: node
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/index.js --server
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
